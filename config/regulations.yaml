@@ -1,0 +1,119 @@
+# UK Regulatory Mapping for PII-Screener
+#
+# Categories are mapped to applicable UK regulations based on statutory text.
+# ICO guidance is deliberately excluded — only primary/secondary legislation is used.
+#
+# Amendment monitoring:
+#   Each entry carries a statutory_ref (canonical legislation.gov.uk URI) and a
+#   last_verified date.  To check for amendments, poll the Atom feed at:
+#     https://www.legislation.gov.uk/eur/2016/679/changes/data.feed  (UK GDPR)
+#     https://www.legislation.gov.uk/uksi/2017/752/changes/data.feed (PSR 2017)
+#   If the feed's <updated> timestamp is newer than last_verified, trigger a
+#   manual review of the mapping below before updating last_verified.
+
+regulations:
+
+  # ── UK GDPR Article 4(1): Personal Data ──────────────────────────────────
+  # Definition is intentionally broad and principles-based.  The list of
+  # categories below is derived from the statutory definition — "any information
+  # relating to an identified or identifiable natural person".
+  # Stable: changing this definition would require amending the retained EU law
+  # via the Data Protection Act 2018 or successor legislation.
+  - id: UK-GDPR-PD
+    name: "UK GDPR — Personal Data"
+    article: "Article 4(1)"
+    statutory_ref: "https://www.legislation.gov.uk/eur/2016/679/article/4"
+    amendment_feed: "https://www.legislation.gov.uk/eur/2016/679/changes/data.feed"
+    last_verified: "2026-06-04"
+    note: >
+      Retained by the European Union (Withdrawal) Act 2018, as amended by the
+      Data Protection, Privacy and Electronic Communications (Amendments etc)
+      (EU Exit) Regulations 2019 (SI 2019/419).
+    applies_to_categories:
+      - pii_email
+      - pii_phone
+      - pii_person_name
+      - pii_date_of_birth
+      - pii_ip_address
+      - pii_mac_address
+      - pii_uk_postcode
+      - pii_ssn              # National Insurance number — uniquely identifies UK persons
+      - pii_uk_driving_licence
+      - pii_passport
+      - pii_drivers_license
+      - pii_iban_bank
+      - pii_bank_account
+      - pii_credit_card
+      - jwt_token            # may encode personal data claims (sub, email, name)
+
+  # ── UK GDPR Article 9(1): Special Category Data ───────────────────────────
+  # CLOSED EXHAUSTIVE LIST — cannot change without primary legislation.
+  # The eight categories listed in Art. 9(1) are the only ones in scope.
+  # Currently only health data (Art. 9(1)(h)) is detectable via regex.
+  - id: UK-GDPR-SC
+    name: "UK GDPR — Special Category Data"
+    article: "Article 9(1)"
+    statutory_ref: "https://www.legislation.gov.uk/eur/2016/679/article/9"
+    amendment_feed: "https://www.legislation.gov.uk/eur/2016/679/changes/data.feed"
+    last_verified: "2026-06-04"
+    note: >
+      Art. 9(1)(h): data concerning health.  NHS numbers uniquely identify
+      individuals within the NHS and constitute health-related personal data.
+      This is the only Art. 9 category currently detectable by PII-Screener.
+    applies_to_categories:
+      - pii_nhs_number       # health data — Art. 9(1)(h)
+
+  # ── Payment Services Regulations 2017 ────────────────────────────────────
+  # SI 2017/752, implementing the EU Payment Services Directive 2 (PSD2) in UK.
+  # Governs payment account data and payment transaction information.
+  # Secondary legislation — in practice stable; scope tied to EU PSD2 lineage
+  # which the UK has preserved post-Brexit.
+  - id: PSR-2017
+    name: "Payment Services Regulations 2017"
+    article: "Regulation 2 (definitions); Schedule 1 (payment services)"
+    statutory_ref: "https://www.legislation.gov.uk/uksi/2017/752"
+    amendment_feed: "https://www.legislation.gov.uk/uksi/2017/752/changes/data.feed"
+    last_verified: "2026-06-04"
+    note: >
+      Payment account identifiers and card data fall within the scope of
+      payment services regulated under PSR 2017.
+    applies_to_categories:
+      - pii_iban_bank
+      - pii_bank_account
+      - pii_uk_sort_code
+      - pii_credit_card
+
+  # ── UK GDPR Article 5(1)(f): Integrity and Confidentiality ───────────────
+  # The principle that personal data must be processed in a manner that ensures
+  # appropriate security, including protection against unauthorised access.
+  # Finding personal data hardcoded in source code is a direct violation of this
+  # principle — source repositories are not appropriate secure storage for PD.
+  # Applies to all personal data categories (Art. 4(1)) and special category
+  # data (Art. 9(1)) since both require appropriate security under Art. 5(1)(f).
+  - id: UK-GDPR-51F
+    name: "UK GDPR — Integrity & Confidentiality"
+    article: "Article 5(1)(f)"
+    statutory_ref: "https://www.legislation.gov.uk/eur/2016/679/article/5"
+    amendment_feed: "https://www.legislation.gov.uk/eur/2016/679/changes/data.feed"
+    last_verified: "2026-06-04"
+    note: >
+      Hardcoded personal data in source code violates the integrity and
+      confidentiality principle — it is not processed with appropriate security.
+    applies_to_categories:
+      - pii_email
+      - pii_phone
+      - pii_person_name
+      - pii_date_of_birth
+      - pii_ip_address
+      - pii_mac_address
+      - pii_uk_postcode
+      - pii_ssn
+      - pii_uk_driving_licence
+      - pii_passport
+      - pii_drivers_license
+      - pii_iban_bank
+      - pii_bank_account
+      - pii_credit_card
+      - pii_nhs_number
+      - pii_uk_sort_code
+      - jwt_token

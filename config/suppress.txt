@@ -1,0 +1,44 @@
+# suppress.txt — global install-level suppressions.
+# A per-project version of this file can be placed in the root of any scanned project.
+#
+# Format
+# ──────
+# Lines before any [section] header are GLOBAL — applied to every scanner.
+# Lines under a [scanner] header apply ONLY to that scanner.
+# Blank lines and # comments are ignored.
+#
+# Available scanner names: presidio, gitleaks, semgrep, sonarqube
+#
+# Example:
+#
+#   CWE-798              ← global: suppressed in every scanner
+#
+#   [pii]
+#   pii_email
+#   pii_phone
+#
+#   [gitleaks]
+#   aws-access-token
+#   generic-api-key
+#
+#   [semgrep]
+#   python.lang.security.audit.formatted-sql-query
+#
+#   [sonarqube]
+#   secrets:S6706
+
+# ── Global suppressions ───────────────────────────────────────────────────────
+# Add entries here to suppress findings across all scanners and all projects.
+
+# ── Per-scanner suppressions ──────────────────────────────────────────────────
+# [presidio]
+# pii_email
+#
+# [gitleaks]
+# aws-access-token
+#
+# [semgrep]
+# python.lang.security.audit.formatted-sql-query
+#
+# [sonarqube]
+# secrets:S6706

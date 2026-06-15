@@ -1,0 +1,54 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "sensitive-code-scanner"
+version = "0.1.0"
+description = "Code-agnostic MCP agent to scan for PII, API keys, and secrets"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [
+    { name = "Ryan Corcoran" },
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Topic :: Security",
+    "Topic :: Software Development :: Quality Assurance",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "mcp[cli]>=1.9.0",
+    "pydantic>=2.7.0",
+    "httpx>=0.27.0",
+    "rich>=13.7.0",
+    "jinja2>=3.1.4",
+    "pyyaml>=6.0.1",
+    "aiofiles>=23.2.1",
+    "typer>=0.12.0",
+]
+
+[project.optional-dependencies]
+spacy = ["spacy>=3.7.0"]
+semgrep = ["semgrep>=1.60.0"]
+docs = ["python-docx>=1.1.0", "openpyxl>=3.1.0", "striprtf>=0.0.26", "olefile>=0.46", "pdfminer.six>=20221105", "extract-msg>=0.28.0", "xlrd>=2.0.1", "pyarrow>=14.0.0", "fastavro>=1.9.0"]
+all = ["spacy>=3.7.0", "semgrep>=1.60.0", "python-docx>=1.1.0", "openpyxl>=3.1.0", "striprtf>=0.0.26", "olefile>=0.46", "pdfminer.six>=20221105", "extract-msg>=0.28.0", "xlrd>=2.0.1", "pyarrow>=14.0.0", "fastavro>=1.9.0"]
+
+[project.urls]
+Repository = "https://github.com/DEFRA/lap-pii-screener"
+Documentation = "https://github.com/DEFRA/lap-pii-screener/blob/main/docs/README.md"
+
+[project.scripts]
+sensitive-scanner = "cli:main"
+sensitive-scanner-mcp = "server:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["scanners", "models", "remediation", "reporting"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"config" = "config"
+"templates" = "templates"
