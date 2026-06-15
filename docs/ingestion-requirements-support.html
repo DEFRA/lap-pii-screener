@@ -158,7 +158,7 @@
 
 <header>
   <h1>PII-Screener — Requirements Support Matrix</h1>
-  <p>Assessed against FR-ING-001–007, FR-DET-001–003, FR-CLS-001–002, FR-RPT-001–005 &nbsp;|&nbsp; Generated 2026-06-11</p>
+  <p>Assessed against FR-ING-001–007, FR-DET-001–003, FR-CLS-001–002, FR-RPT-001–005, NFR-P-001–006 &nbsp;|&nbsp; Updated 2026-06-15</p>
   <div class="legend">
     <span><span class="dot dot-yes"></span> Supported</span>
     <span><span class="dot dot-partial"></span> Partial support</span>
@@ -170,10 +170,10 @@
 <div class="summary-bar">
   <h3>Overall Coverage</h3>
   <div class="summary-grid">
-    <div class="summary-cell"><div class="big big-yes">47</div><div class="lbl">Supported</div></div>
-    <div class="summary-cell"><div class="big big-partial">11</div><div class="lbl">Partial</div></div>
-    <div class="summary-cell"><div class="big big-no">17</div><div class="lbl">Not Supported</div></div>
-    <div class="summary-cell"><div class="big">75</div><div class="lbl">Total Items</div></div>
+    <div class="summary-cell"><div class="big big-yes">48</div><div class="lbl">Supported</div></div>
+    <div class="summary-cell"><div class="big big-partial">12</div><div class="lbl">Partial</div></div>
+    <div class="summary-cell"><div class="big big-no">21</div><div class="lbl">Not Supported</div></div>
+    <div class="summary-cell"><div class="big">81</div><div class="lbl">Total Items</div></div>
   </div>
 </div>
 
@@ -993,8 +993,71 @@
   </table>
 </div>
 
+<!-- ─── NFR-P-001–006 ─────────────────────────────────────────────────────── -->
+<div class="section-card">
+  <div class="section-header">
+    <span class="fr-id">NFR-P-001–006</span>
+    <h2>Performance Non-Functional Requirements</h2>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th style="width:8%">ID</th>
+        <th class="col-format" style="width:26%">Requirement</th>
+        <th style="width:12%">Target</th>
+        <th class="col-status" style="width:14%">Status</th>
+        <th class="col-notes">Notes</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td style="font-weight:600;white-space:nowrap">NFR-P-001</td>
+        <td class="col-format">Structured file throughput</td>
+        <td>≥ 1 GB/min (4-core, 16 GB RAM)</td>
+        <td class="col-status"><span class="badge badge-partial">~ Partial</span></td>
+        <td class="col-notes">With the regex-only layer active, throughput on plain-text and code files is likely to approach this target — file I/O is async (<code>aiofiles</code>) and patterns are pre-compiled. When the NER layer is active (Presidio + spaCy <code>en_core_web_sm</code>), every chunk passes through an in-process neural model, reducing throughput materially below 1 GB/min. No formal benchmark has been run against a 4-core 16 GB node.</td>
+      </tr>
+      <tr>
+        <td style="font-weight:600;white-space:nowrap">NFR-P-002</td>
+        <td class="col-format">Unstructured document throughput</td>
+        <td>≥ 500 pages/min (text-based PDF)</td>
+        <td class="col-status"><span class="badge badge-no">✗ Not Met</span></td>
+        <td class="col-notes">PDF extraction uses <code>pdfminer.six</code>, which is synchronous and single-threaded. Typical throughput is 1–8 pages/sec (60–480 pages/min) depending on page complexity — unreliably below the 500 pages/min target. Scanned (image-only) PDFs are not supported at all (see FR-ING-005 and NFR-P-003). Would require a faster backend (e.g. <code>pymupdf</code>) and extraction in a <code>ProcessPoolExecutor</code>.</td>
+      </tr>
+      <tr>
+        <td style="font-weight:600;white-space:nowrap">NFR-P-003</td>
+        <td class="col-format">Image OCR throughput</td>
+        <td>≥ 60 images/min at 300 DPI</td>
+        <td class="col-status"><span class="badge badge-no">✗ Not Supported</span></td>
+        <td class="col-notes">No OCR capability exists. <code>pytesseract</code>, <code>easyocr</code>, <code>Pillow</code>, and Tesseract are absent from the dependency tree. Image formats (<code>.png</code>, <code>.jpg</code>, <code>.tiff</code>, etc.) are silently skipped during traversal. NFR cannot be assessed against a throughput target as the capability does not exist — see FR-ING-005.</td>
+      </tr>
+      <tr>
+        <td style="font-weight:600;white-space:nowrap">NFR-P-004</td>
+        <td class="col-format">Database scan rate</td>
+        <td>≥ 100,000 rows/min per connection</td>
+        <td class="col-status"><span class="badge badge-no">✗ Not Supported</span></td>
+        <td class="col-notes">No live database connectivity (see FR-ING-007). The <code>db_conn_string</code> rule detects credentials embedded in source code — it is not a database content scanner. Flat-file exports (CSV, Parquet, ORC, Avro) are supported but no row-throughput benchmark exists and the 100,000 rows/min target has not been validated. Requires a dedicated connector with connection pooling and batched reads.</td>
+      </tr>
+      <tr>
+        <td style="font-weight:600;white-space:nowrap">NFR-P-005</td>
+        <td class="col-format">Report generation time</td>
+        <td>Executive report within 60 seconds of scan completion</td>
+        <td class="col-status"><span class="badge badge-yes">✓ Met</span></td>
+        <td class="col-notes">Report generation is entirely in-memory. The Jinja2 <code>Environment</code> is cached at module level (no recompilation) and the <code>RegulationEngine</code> is lazy-initialised and cached. All four output formats (HTML, Markdown, JSON, console) complete in well under 5 seconds in practice, even for scans with thousands of findings.</td>
+      </tr>
+      <tr>
+        <td style="font-weight:600;white-space:nowrap">NFR-P-006</td>
+        <td class="col-format">Horizontal scalability</td>
+        <td>Linear scaling to 64 parallel worker nodes</td>
+        <td class="col-status"><span class="badge badge-no">✗ Not Met</span></td>
+        <td class="col-notes">The tool is a single-node, single-process application. Concurrency is provided by <code>asyncio</code> and by running scanner subprocesses in parallel — good utilisation of one multi-core machine, but not distributed across hosts. No work queue, coordinator/worker topology, or shared state store exists. Would require a task-queue layer (e.g. Celery + Redis, or Ray) partitioning the file tree across workers, with a central coordinator merging and deduplicating results.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
 <footer>
-  PII-Screener &nbsp;|&nbsp; Support matrix generated 2026-06-11 &nbsp;|&nbsp; For implementation queries raise an issue or consult docs/scanners.md
+  PII-Screener &nbsp;|&nbsp; Support matrix updated 2026-06-15 &nbsp;|&nbsp; For implementation queries raise an issue or consult docs/scanners.md
 </footer>
 
 </body>

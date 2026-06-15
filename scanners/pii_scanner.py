@@ -357,30 +357,46 @@ def _should_scan(path: Path) -> bool:
 
 _NLP = None
 _SPACY_AVAILABLE = False
+_SPACY_INIT_ATTEMPTED = False
 
-try:
-    import spacy  # type: ignore
 
+def _ensure_spacy() -> None:
+    """Lazy-load the spaCy model on first use — avoids ~30s import cost at startup."""
+    global _NLP, _SPACY_AVAILABLE, _SPACY_INIT_ATTEMPTED
+    if _SPACY_INIT_ATTEMPTED:
+        return
+    _SPACY_INIT_ATTEMPTED = True
     try:
-        _NLP = spacy.load("en_core_web_sm", disable=["parser", "tagger", "attribute_ruler", "lemmatizer"])
-        _SPACY_AVAILABLE = True
-    except OSError:
-        print("[pii_scanner] spaCy model 'en_core_web_sm' not found. "
-              "Run: python -m spacy download en_core_web_sm", file=sys.stderr)
-except ImportError:
-    pass  # spaCy is optional
+        import spacy  # type: ignore
+        try:
+            _NLP = spacy.load("en_core_web_sm", disable=["parser", "tagger", "attribute_ruler", "lemmatizer"])
+            _SPACY_AVAILABLE = True
+        except OSError:
+            print("[pii_scanner] spaCy model 'en_core_web_sm' not found. "
+                  "Run: python -m spacy download en_core_web_sm", file=sys.stderr)
+    except ImportError:
+        pass  # spaCy is optional
+
 
 # ─── Presidio NER (optional — preferred over spaCy when both present) ─────────
 
 _PRESIDIO_ANALYZER = None
 _PRESIDIO_AVAILABLE = False
+_PRESIDIO_INIT_ATTEMPTED = False
 
-try:
-    from presidio_analyzer import AnalyzerEngine  # type: ignore
-    _PRESIDIO_ANALYZER = AnalyzerEngine()
-    _PRESIDIO_AVAILABLE = True
-except ImportError:
-    pass  # Presidio is optional — spaCy used as fallback when available
+
+def _ensure_presidio() -> None:
+    """Lazy-load Presidio on first use — avoids ~40s import cost at startup."""
+    global _PRESIDIO_ANALYZER, _PRESIDIO_AVAILABLE, _PRESIDIO_INIT_ATTEMPTED
+    if _PRESIDIO_INIT_ATTEMPTED:
+        return
+    _PRESIDIO_INIT_ATTEMPTED = True
+    try:
+        from presidio_analyzer import AnalyzerEngine  # type: ignore
+        _PRESIDIO_ANALYZER = AnalyzerEngine()
+        _PRESIDIO_AVAILABLE = True
+    except ImportError:
+        pass  # Presidio is optional — spaCy used as fallback when available
 
 # Extracts content from inside string literals only (single or double quoted)
 _STRING_LITERAL_RE = re.compile(r'"([^"]{6,}?)"|\'([^\'"]{6,}?)\'')
@@ -438,6 +454,8 @@ def _ner_confirm_person(text: str, threshold: float = 0.65) -> bool:
     text = text.strip()
     if not text:
         return False
+    _ensure_presidio()
+    _ensure_spacy()
     if _PRESIDIO_AVAILABLE and _PRESIDIO_ANALYZER is not None:
         results = _PRESIDIO_ANALYZER.analyze(
             text=text[:500], language="en", entities=["PERSON"]
@@ -502,6 +520,8 @@ def _extract_ner_findings(file_rel: str, content: str, show_secrets: bool = Fals
     suffix = Path(file_rel).suffix.lower()
     if suffix in _CSV_EXTENSIONS:
         return []
+    _ensure_presidio()
+    _ensure_spacy()
     if not _PRESIDIO_AVAILABLE and (not _SPACY_AVAILABLE or _NLP is None):
         return []
 
@@ -689,6 +709,10 @@ def _scan_csv_columns(file_rel: str, content: str, show_secrets: bool) -> list[F
             broad_col_indices.append(i)
 
     ner_available = _PRESIDIO_AVAILABLE or (_SPACY_AVAILABLE and _NLP is not None)
+    if not ner_available:
+        _ensure_presidio()
+        _ensure_spacy()
+        ner_available = _PRESIDIO_AVAILABLE or (_SPACY_AVAILABLE and _NLP is not None)
     if not strict_col_indices and (not broad_col_indices or not ner_available):
         return []
 

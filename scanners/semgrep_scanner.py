@@ -62,29 +62,38 @@ async def _download_ruleset(ruleset: str, dest: Path) -> bool:
     Returns True on success.  On any network/HTTP error the existing cached
     file (if present) is left untouched so the scan can still proceed offline.
     """
+    import ssl as _ssl
+
     url = _SEMGREP_REGISTRY_URL.format(ruleset=ruleset)
-    # SSL verification: honour standard CA-bundle env vars set by corporate
-    # proxy tools (ZScaler, Fiddler, etc.), then fall back to httpx default.
-    # Set SEMGREP_RULES_SSL_VERIFY=false to disable verification entirely as a
-    # last resort — a warning is printed when this is active.
-    _ca_bundle = (
-        os.environ.get("REQUESTS_CA_BUNDLE")
-        or os.environ.get("SSL_CERT_FILE")
-    )
-    _verify: bool | str
+
+    # Build an explicit SSL context so corporate proxy CA certs (ZScaler, etc.)
+    # are handled correctly regardless of httpx version or env var precedence.
+    # Priority: SEMGREP_RULES_SSL_VERIFY=false > REQUESTS_CA_BUNDLE / SSL_CERT_FILE > default.
     if os.environ.get("SEMGREP_RULES_SSL_VERIFY", "").lower() == "false":
-        _verify = False
+        # Build a no-verification context — more reliable than passing verify=False
+        # to httpx, which can be overridden by REQUESTS_CA_BUNDLE in some versions.
+        _ssl_ctx = _ssl.create_default_context()
+        _ssl_ctx.check_hostname = False
+        _ssl_ctx.verify_mode = _ssl.CERT_NONE
         print(
             "[semgrep] WARNING: SSL verification disabled via SEMGREP_RULES_SSL_VERIFY=false",
             file=sys.stderr,
         )
-    elif _ca_bundle:
-        _verify = _ca_bundle
+        _verify: bool | str | _ssl.SSLContext = _ssl_ctx
     else:
-        _verify = True
+        _ca_bundle = (
+            os.environ.get("REQUESTS_CA_BUNDLE")
+            or os.environ.get("SSL_CERT_FILE")
+        )
+        _verify = _ca_bundle if _ca_bundle else True
 
     try:
-        async with httpx.AsyncClient(timeout=30, follow_redirects=True, verify=_verify) as client:
+        async with httpx.AsyncClient(
+            timeout=30,
+            follow_redirects=True,
+            verify=_verify,
+            trust_env=(_verify is not False and not isinstance(_verify, _ssl.SSLContext)),
+        ) as client:
             resp = await client.get(url)
             resp.raise_for_status()
             dest.parent.mkdir(parents=True, exist_ok=True)
