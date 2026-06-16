@@ -199,22 +199,22 @@
       <tr>
         <td class="col-format">Microsoft Excel (.xlsx)</td>
         <td class="col-status"><span class="badge badge-yes">✓ Supported</span></td>
-        <td class="col-notes">Cell values extracted from all worksheets via <code>openpyxl</code> (optional dep; skipped gracefully if not installed). Install with <code>pip install pii-screener[docs]</code>.</td>
+        <td class="col-notes">Cell values extracted from all worksheets via <code>openpyxl</code> (optional dep; skipped gracefully if not installed). Install with <code>pip install -e .[docs]</code>.</td>
       </tr>
       <tr>
         <td class="col-format">Microsoft Excel (.xls)</td>
         <td class="col-status"><span class="badge badge-yes">✓ Supported</span></td>
-        <td class="col-notes">Cell values extracted from all sheets via <code>xlrd</code> (optional dep). Install with <code>pip install pii-screener[docs]</code>.</td>
+        <td class="col-notes">Cell values extracted from all sheets via <code>xlrd</code> (optional dep). Install with <code>pip install -e .[docs]</code>.</td>
       </tr>
       <tr>
         <td class="col-format">Apache Parquet (.parquet)</td>
         <td class="col-status"><span class="badge badge-yes">✓ Supported</span></td>
-        <td class="col-notes">All column values from all row groups extracted via <code>pyarrow</code> (optional dep). Install with <code>pip install pii-screener[docs]</code>.</td>
+        <td class="col-notes">All column values from all row groups extracted via <code>pyarrow</code> (optional dep). Install with <code>pip install -e .[docs]</code>.</td>
       </tr>
       <tr>
         <td class="col-format">Apache ORC (.orc)</td>
         <td class="col-status"><span class="badge badge-yes">✓ Supported</span></td>
-        <td class="col-notes">All column values extracted via <code>pyarrow</code> (same dep as .parquet; optional). Install with <code>pip install pii-screener[docs]</code>.</td>
+        <td class="col-notes">All column values extracted via <code>pyarrow</code> (same dep as .parquet; optional). Install with <code>pip install -e .[docs]</code>.</td>
       </tr>
       <tr>
         <td class="col-format">SQL dump files (.sql)</td>
@@ -247,17 +247,17 @@
       <tr>
         <td class="col-format">Microsoft Word (.docx)</td>
         <td class="col-status"><span class="badge badge-yes">✓ Supported</span></td>
-        <td class="col-notes">Paragraphs and table cells extracted via <code>python-docx</code> (optional dep). Install with <code>pip install pii-screener[docs]</code>.</td>
+        <td class="col-notes">Paragraphs and table cells extracted via <code>python-docx</code> (optional dep). Install with <code>pip install -e .[docs]</code>.</td>
       </tr>
       <tr>
         <td class="col-format">Microsoft Word (.doc)</td>
         <td class="col-status"><span class="badge badge-yes">✓ Supported</span></td>
-        <td class="col-notes">Text extracted from all OLE streams via <code>olefile</code> (optional dep); printable ASCII and UTF-16 LE runs captured. Install with <code>pip install pii-screener[docs]</code>.</td>
+        <td class="col-notes">Text extracted from all OLE streams via <code>olefile</code> (optional dep); printable ASCII and UTF-16 LE runs captured. Install with <code>pip install -e .[docs]</code>.</td>
       </tr>
       <tr>
         <td class="col-format">PDF — text-based</td>
         <td class="col-status"><span class="badge badge-yes">✓ Supported</span></td>
-        <td class="col-notes">Text layer extracted via <code>pdfminer.six</code> (optional dep). Scanned PDFs (image-only) are not supported. Install with <code>pip install pii-screener[docs]</code>.</td>
+        <td class="col-notes">Text layer extracted via <code>pdfminer.six</code> (optional dep). Scanned PDFs (image-only) are not supported. Install with <code>pip install -e .[docs]</code>.</td>
       </tr>
       <tr>
         <td class="col-format">PDF — scanned / image-based</td>
@@ -272,7 +272,7 @@
       <tr>
         <td class="col-format">Rich Text Format (.rtf)</td>
         <td class="col-status"><span class="badge badge-yes">✓ Supported</span></td>
-        <td class="col-notes">RTF control words stripped via <code>striprtf</code> (optional dep). Install with <code>pip install pii-screener[docs]</code>.</td>
+        <td class="col-notes">RTF control words stripped via <code>striprtf</code> (optional dep). Install with <code>pip install -e .[docs]</code>.</td>
       </tr>
       <tr>
         <td class="col-format">HTML and XHTML</td>
@@ -292,7 +292,7 @@
       <tr>
         <td class="col-format">Email files (.msg)</td>
         <td class="col-status"><span class="badge badge-yes">✓ Supported</span></td>
-        <td class="col-notes">Sender, recipients, subject, and body extracted via <code>extract-msg</code> (optional dep). Install with <code>pip install pii-screener[docs]</code>.</td>
+        <td class="col-notes">Sender, recipients, subject, and body extracted via <code>extract-msg</code> (optional dep). Install with <code>pip install -e .[docs]</code>.</td>
       </tr>
     </tbody>
   </table>
@@ -320,7 +320,7 @@
       <tr>
         <td class="col-format">AVRO</td>
         <td class="col-status"><span class="badge badge-yes">✓ Supported</span></td>
-        <td class="col-notes">All record field values deserialised and scanned via <code>fastavro</code> (optional dep). Install with <code>pip install pii-screener[docs]</code>.</td>
+        <td class="col-notes">All record field values deserialised and scanned via <code>fastavro</code> (optional dep). Install with <code>pip install -e .[docs]</code>.</td>
       </tr>
       <tr>
         <td class="col-format">Base64-encoded strings</td>

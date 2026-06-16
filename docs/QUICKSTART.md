@@ -22,8 +22,8 @@ Open a **new** PowerShell window after both installs. Then continue below.
 ## Step 1 — Get the code
 
 ```powershell
-git clone <repo-url> C:\Github\PII-Screener
-cd C:\Github\PII-Screener
+git clone https://github.com/DEFRA/lap-pii-screener C:\Github\lap-pii-screener
+cd C:\Github\lap-pii-screener
 ```
 
 ---
