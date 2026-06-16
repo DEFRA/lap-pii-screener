@@ -64,8 +64,8 @@ The setup wizard (`sensitive-scanner setup`) handles all binary downloads automa
 ## Quick start
 
 ```powershell
-git clone <repo-url> C:\Github\PII-Screener
-cd C:\Github\PII-Screener
+git clone https://github.com/DEFRA/lap-pii-screener C:\Github\lap-pii-screener
+cd C:\Github\lap-pii-screener
 python -m pip install -r requirements.txt
 python -m pip install -e .
 sensitive-scanner setup

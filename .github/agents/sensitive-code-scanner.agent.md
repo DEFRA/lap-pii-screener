@@ -18,7 +18,7 @@ Before running anything, find the CLI. Work through these checks in order and st
 
 2. Search for `cli.py` under common clone locations:
    ```
-   where /r %USERPROFILE% cli.py 2>nul | findstr /i "PII-Screener sensitive-scanner"
+   where /r %USERPROFILE% cli.py 2>nul | findstr /i "lap-pii-screener PII-Screener sensitive-scanner"
    ```
 
 3. Check if the current workspace root contains `cli.py`:

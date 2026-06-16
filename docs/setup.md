@@ -60,17 +60,17 @@ Expected output: `Python 3.14.0` (any 3.11+ is fine).
 ## Step 2 — Get the code
 
 ```powershell
-git clone <repo-url> C:\Github\PII-Screener
+git clone https://github.com/DEFRA/lap-pii-screener C:\Github\lap-pii-screener
 ```
 
-If you do not have Git, download the ZIP from the repository page, extract it, and place the folder at `C:\Github\PII-Screener`.
+If you do not have Git, download the ZIP from the repository page, extract it, and place the folder at `C:\Github\lap-pii-screener`.
 
 ---
 
 ## Step 3 — Install Python packages
 
 ```powershell
-cd C:\Github\PII-Screener
+cd C:\Github\lap-pii-screener
 python -m pip install -r requirements.txt
 ```
 
@@ -83,7 +83,7 @@ You will see a lot of text scroll past — that is normal. Wait until you get a 
 This makes `sensitive-scanner` available from any folder, not just the project directory.
 
 ```powershell
-cd C:\Github\PII-Screener
+cd C:\Github\lap-pii-screener
 python -m pip install -e .
 ```
 
@@ -288,7 +288,7 @@ Copy the full path printed — for example `C:\Users\YourName\AppData\Local\Pyth
   "servers": {
     "pii-screener": {
       "command": "C:\\Users\\YourName\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe",
-      "args": ["C:\\Github\\PII-Screener\\server.py"],
+      "args": ["C:\\Github\\lap-pii-screener\\server.py"],
       "env": {
         "SONAR_HOST_URL": "http://localhost:9100",
         "SONAR_TOKEN": "squ_abc123..."
@@ -320,7 +320,7 @@ Open Copilot Chat (`Ctrl+Alt+I`), ensure **Agent** mode is selected, and type na
 
 ### `sensitive-scanner` is not recognised as a command
 
-Run `python -m pip install -e .` from the `C:\Github\PII-Screener` folder. If that fails, check that `~\AppData\Local\Python\pythoncore-3.x\Scripts` is on your PATH.
+Run `python -m pip install -e .` from the `C:\Github\lap-pii-screener` folder. If that fails, check that `~\AppData\Local\Python\pythoncore-3.x\Scripts` is on your PATH.
 
 ### SonarQube does not start
 

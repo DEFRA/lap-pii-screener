@@ -124,15 +124,12 @@ You should see something like `Python 3.14.0`.  Any version 3.11 or higher is fi
 Open PowerShell and run:
 
 ```powershell
-git clone <repo-url> C:\Github\PII-Screener
+git clone https://github.com/DEFRA/lap-pii-screener C:\Github\lap-pii-screener
 ```
-
-Replace `<repo-url>` with the actual URL of this repository (ask a colleague if you are
-not sure what it is).
 
 If you do not have Git installed, you can instead download a ZIP from the repository website
 (look for a "Code" or "Download ZIP" button), extract it, and place the folder at
-`C:\Github\PII-Screener`.
+`C:\Github\lap-pii-screener`.
 
 ---
 
@@ -144,7 +141,7 @@ library that produces coloured terminal output, the YAML configuration reader, e
 In PowerShell, navigate into the project folder and run the install:
 
 ```powershell
-cd C:\Github\PII-Screener
+cd C:\Github\lap-pii-screener
 python -m pip install -r requirements.txt
 ```
 
@@ -162,7 +159,7 @@ You will see a lot of text scroll past — that is normal.  Wait until you get a
 any folder, rather than having to be inside the project folder every time.
 
 ```powershell
-cd C:\Github\PII-Screener
+cd C:\Github\lap-pii-screener
 python -m pip install -e .
 ```
 
@@ -376,7 +373,7 @@ sensitive-scanner scan C:\Github\MyProject --suppress "pii_email"
 
 **Permanent suppression** (suppressed on every future scan):
 
-Open the file `C:\Github\PII-Screener\config\suppress.txt` in any text editor and add the Rule
+Open the file `C:\Github\lap-pii-screener\config\suppress.txt` in any text editor and add the Rule
 ID on a new line:
 
 ```
@@ -433,7 +430,7 @@ Copy this value — you will need it in the next step.
   "servers": {
     "pii-screener": {
       "command": "C:\\Users\\YourName\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe",
-      "args": ["C:\\Github\\PII-Screener\\server.py"],
+      "args": ["C:\\Github\\lap-pii-screener\\server.py"],
       "env": {
         "SONAR_HOST_URL": "http://localhost:9100",
         "SONAR_TOKEN": ""
@@ -634,7 +631,7 @@ already logged in).
 **Fix:**
 
 ```powershell
-cd C:\Github\PII-Screener
+cd C:\Github\lap-pii-screener
 python -m pip install -e .
 ```
 
@@ -809,7 +806,7 @@ python -c "import sys; print(sys.executable)"
 ```
 
 3. Is the `args` path in `settings.json` pointing to the correct `server.py`?  Use the
-   full absolute path to `C:\Github\PII-Screener\server.py` (or wherever you cloned the
+   full absolute path to `C:\Github\lap-pii-screener\server.py` (or wherever you cloned the
    repo).
 
 4. Check the VS Code Output panel: press `Ctrl+Shift+U`, then in the dropdown at the top
@@ -819,7 +816,7 @@ python -c "import sys; print(sys.executable)"
    installed in the Python environment VS Code is using.  Run:
 
 ```powershell
-"C:\path\to\your\python.exe" -m pip install -r C:\Github\PII-Screener\requirements.txt
+"C:\path\to\your\python.exe" -m pip install -r C:\Github\lap-pii-screener\requirements.txt
 ```
 
 Using the exact Python path from step 2 above.
@@ -926,7 +923,7 @@ Add the following block (merge into the top-level JSON object):
   "servers": {
     "pii-screener": {
       "command": "C:\\Users\\<you>\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe",
-      "args": ["<repo-path>\\server.py"],
+      "args": ["C:\\Github\\lap-pii-screener\\server.py"],
       "env": {
         "SONAR_HOST_URL": "http://localhost:9100",
         "SONAR_TOKEN": ""

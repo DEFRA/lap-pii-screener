@@ -11,14 +11,14 @@ The file `.github/agents/sensitive-code-scanner.agent.md` defines a custom GitHu
 Clone to any location you prefer — the agent discovers the CLI automatically:
 
 ```
-git clone https://github.com/<your-org>/PII-Screener
+git clone https://github.com/DEFRA/lap-pii-screener
 ```
 
 The agent finds the CLI by checking in this order:
 
 1. `sensitive-scanner` on your system PATH (available automatically after `pip install -e .`)
-2. Any `cli.py` under `%USERPROFILE%` whose path contains `PII-Screener` or `sensitive-scanner`
-3. A `cli.py` in the current workspace root (if you opened the PII-Screener repo itself)
+2. Any `cli.py` under `%USERPROFILE%` whose path contains `lap-pii-screener`, `PII-Screener`, or `sensitive-scanner`
+3. A `cli.py` in the current workspace root (if you opened the lap-pii-screener repo itself)
 4. Prompting you to provide the path if none of the above succeed
 
 ### 2. Python 3.11+
@@ -30,7 +30,7 @@ python --version   # must be 3.11 or higher
 ### 3. Install Python dependencies
 
 ```
-cd C:\Github\PII-Screener
+cd C:\Github\lap-pii-screener
 pip install -r requirements.txt
 ```
 
@@ -65,10 +65,10 @@ Copy (or symlink) the agent file into the target project:
 
 ```
 # Option A — copy
-copy C:\Github\PII-Screener\.github\agents\sensitive-code-scanner.agent.md <target-project>\.github\agents\sensitive-code-scanner.agent.md
+copy C:\Github\lap-pii-screener\.github\agents\sensitive-code-scanner.agent.md <target-project>\.github\agents\sensitive-code-scanner.agent.md
 
 # Option B — user-profile (available in ALL workspaces automatically)
-copy C:\Github\PII-Screener\.github\agents\sensitive-code-scanner.agent.md "%APPDATA%\Code\User\prompts\agents\sensitive-code-scanner.agent.md"
+copy C:\Github\lap-pii-screener\.github\agents\sensitive-code-scanner.agent.md "%APPDATA%\Code\User\prompts\agents\sensitive-code-scanner.agent.md"
 ```
 
 After copying, reload VS Code. The **Sensitive Code Scanner** agent will appear in the Copilot Chat agent picker.
