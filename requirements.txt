@@ -1,0 +1,30 @@
+mcp[cli]>=1.9.0
+pydantic>=2.7.0
+httpx>=0.27.0
+rich>=13.7.0
+jinja2>=3.1.4
+pyyaml>=6.0.1
+aiofiles>=23.2.1
+typer>=0.12.0
+# Optional: Semgrep — AST-based secrets + OWASP Top-10 scanner (Tier 1 upgrade)
+# pip install semgrep
+# Optional: install for unstructured PII (names, addresses) via NLP
+# spacy>=3.7.0
+# After installing spacy, run: python -m spacy download en_core_web_sm
+# Optional: Presidio — preferred NER backend, better recall/precision than spaCy alone
+# presidio-analyzer>=2.2.0
+# presidio-anonymizer>=2.2.0
+# After installing presidio, spaCy en_core_web_sm is still required as the NLP engine
+# Optional: Binary document extraction
+# python-docx>=1.1.0    # .docx support
+# openpyxl>=3.1.0       # .xlsx support
+# striprtf>=0.0.26      # .rtf support
+# olefile>=0.46         # .doc (legacy Word 97-2003) support
+# pdfminer.six>=20221105 # .pdf text-layer extraction
+# extract-msg>=0.28.0   # .msg (Outlook) support
+# xlrd>=2.0.1           # .xls (legacy Excel 97-2003) support
+# pyarrow>=14.0.0       # .parquet and .orc columnar format support
+# fastavro>=1.9.0       # .avro support
+# .eml support is built-in (Python stdlib email module)
+# ZIP, TAR, GZIP, BZIP2 archive traversal is built-in (Python stdlib)
+# Install all at once: pip install pii-screener[docs]

@@ -1,0 +1,177 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="640" height="760" viewBox="0 0 640 760"
+     xmlns="http://www.w3.org/2000/svg"
+     font-family="'Segoe UI', Arial, sans-serif">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 7" markerWidth="10" markerHeight="7"
+            refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0 10 3.5 0 7" fill="#64748B"/>
+    </marker>
+    <marker id="arr-lite" viewBox="0 0 10 7" markerWidth="10" markerHeight="7"
+            refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0 10 3.5 0 7" fill="#94A3B8"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="640" height="760" fill="#F8FAFC"/>
+
+  <!-- ═══════════════════════════════════════════════════ Title -->
+  <text x="320" y="26" text-anchor="middle" font-size="16" font-weight="700" fill="#0F172A">PII Screener — Scan Data Flow</text>
+
+  <!-- ═══════════════════════════════════════════════ Entry Points -->
+  <!-- Outer box: x=90, w=460, cx=320 -->
+  <rect x="90" y="38" width="460" height="54" rx="8" fill="#DBEAFE" stroke="#2563EB" stroke-width="1.5"/>
+  <rect x="100" y="46" width="210" height="38" rx="5" fill="#2563EB"/>
+  <text x="205" y="63" text-anchor="middle" font-size="10" font-weight="700" fill="white">CLI  (cli.py)</text>
+  <text x="205" y="78" text-anchor="middle" font-size="8.5" fill="#BFDBFE">sensitive-scanner scan</text>
+  <rect x="330" y="46" width="210" height="38" rx="5" fill="#1D4ED8"/>
+  <text x="435" y="63" text-anchor="middle" font-size="10" font-weight="700" fill="white">MCP Server  (server.py)</text>
+  <text x="435" y="78" text-anchor="middle" font-size="8.5" fill="#BFDBFE">scan_codebase tool</text>
+
+  <!-- Arrow + ScanConfig label -->
+  <line x1="320" y1="92" x2="320" y2="114" stroke="#64748B" stroke-width="1.5" marker-end="url(#arr)"/>
+  <rect x="261" y="96" width="118" height="15" rx="3" fill="#F8FAFC"/>
+  <text x="320" y="108" text-anchor="middle" font-size="8.5" fill="#475569">ScanConfig</text>
+
+  <!-- ══════════════════════════════════════ Orchestrator -->
+  <!-- x=100, w=440, cx=320 -->
+  <rect x="100" y="116" width="440" height="44" rx="8" fill="#DCFCE7" stroke="#16A34A" stroke-width="1.5"/>
+  <text x="320" y="135" text-anchor="middle" font-size="10" font-weight="700" fill="#14532D">orchestrator.run_scan(config)</text>
+  <text x="320" y="152" text-anchor="middle" font-size="9"   fill="#166534">scanners/orchestrator.py</text>
+
+  <!-- Fan arrows: Orchestrator → Scanners -->
+  <!-- cx positions: 125, 255, 385, 515 -->
+  <line x1="125" y1="160" x2="125" y2="180" stroke="#64748B" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="255" y1="160" x2="255" y2="180" stroke="#64748B" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="385" y1="160" x2="385" y2="180" stroke="#64748B" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="515" y1="160" x2="515" y2="180" stroke="#94A3B8" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#arr-lite)"/>
+
+  <!-- ═════════════════════════════════════════ Scanner Boxes -->
+  <!-- Each w=118. Positions: 66, 196, 326, 456 -->
+
+  <!-- Gitleaks: x=66, cx=125 -->
+  <rect x="66" y="180" width="118" height="72" rx="6" fill="#FEF3C7" stroke="#D97706" stroke-width="1.5"/>
+  <text x="125" y="200" text-anchor="middle" font-size="10" font-weight="700" fill="#92400E">Gitleaks</text>
+  <text x="125" y="215" text-anchor="middle" font-size="8"   fill="#78350F">gitleaks_scanner.py</text>
+  <text x="125" y="228" text-anchor="middle" font-size="8"   fill="#78350F">150+ secret rules</text>
+  <text x="125" y="243" text-anchor="middle" font-size="7.5" fill="#B45309">Tier 1 · binary</text>
+
+  <!-- Semgrep: x=196, cx=255 -->
+  <rect x="196" y="180" width="118" height="72" rx="6" fill="#FEF3C7" stroke="#D97706" stroke-width="1.5"/>
+  <text x="255" y="200" text-anchor="middle" font-size="10" font-weight="700" fill="#92400E">Semgrep</text>
+  <text x="255" y="215" text-anchor="middle" font-size="8"   fill="#78350F">semgrep_scanner.py</text>
+  <text x="255" y="228" text-anchor="middle" font-size="8"   fill="#78350F">Code-structure rules</text>
+  <text x="255" y="243" text-anchor="middle" font-size="7.5" fill="#B45309">Tier 1 · pip/binary</text>
+
+  <!-- PII Scanner: x=326, cx=385 -->
+  <rect x="326" y="180" width="118" height="72" rx="6" fill="#FCE7F3" stroke="#DB2777" stroke-width="1.5"/>
+  <text x="385" y="200" text-anchor="middle" font-size="10" font-weight="700" fill="#9D174D">PII Scanner</text>
+  <text x="385" y="215" text-anchor="middle" font-size="8"   fill="#831843">pii_scanner.py</text>
+  <text x="385" y="228" text-anchor="middle" font-size="8"   fill="#831843">Regex + NER + docs</text>
+  <text x="385" y="243" text-anchor="middle" font-size="7.5" fill="#BE185D">Tier 1 · in-process</text>
+
+  <!-- SonarQube: x=456, cx=515  (optional — dashed) -->
+  <rect x="456" y="180" width="118" height="72" rx="6" fill="#F1F5F9" stroke="#94A3B8" stroke-width="1.5" stroke-dasharray="6,3"/>
+  <text x="515" y="200" text-anchor="middle" font-size="10" font-weight="700" fill="#475569">SonarQube</text>
+  <text x="515" y="215" text-anchor="middle" font-size="8"   fill="#64748B">sonarqube_scanner.py</text>
+  <text x="515" y="228" text-anchor="middle" font-size="8"   fill="#64748B">Taint analysis</text>
+  <text x="515" y="243" text-anchor="middle" font-size="7.5" fill="#94A3B8">Tier 2/3 · optional</text>
+
+  <!-- ══════════════════════════════ Merge: scanners → pipeline -->
+  <line x1="125" y1="252" x2="125" y2="268" stroke="#64748B" stroke-width="1.5"/>
+  <line x1="255" y1="252" x2="255" y2="268" stroke="#64748B" stroke-width="1.5"/>
+  <line x1="385" y1="252" x2="385" y2="268" stroke="#64748B" stroke-width="1.5"/>
+  <line x1="515" y1="252" x2="515" y2="268" stroke="#94A3B8" stroke-width="1.5" stroke-dasharray="5,3"/>
+  <!-- Horizontal join: solid 125→385, dashed 385→515 -->
+  <line x1="125" y1="268" x2="385" y2="268" stroke="#64748B" stroke-width="1.5"/>
+  <line x1="385" y1="268" x2="515" y2="268" stroke="#94A3B8" stroke-width="1.5" stroke-dasharray="5,3"/>
+  <!-- Arrow + label -->
+  <line x1="320" y1="268" x2="320" y2="294" stroke="#64748B" stroke-width="1.5" marker-end="url(#arr)"/>
+  <rect x="330" y="272" width="100" height="14" rx="2" fill="#F8FAFC"/>
+  <text x="380" y="283" font-size="8.5" fill="#475569">list[Finding] × 4</text>
+
+  <!-- ══════════════════════════════ Processing Pipeline -->
+
+  <!-- _apply_suppression(): x=175, w=290, cx=320 -->
+  <rect x="175" y="296" width="290" height="38" rx="6" fill="#F0F9FF" stroke="#0EA5E9" stroke-width="1.5"/>
+  <text x="320" y="314" text-anchor="middle" font-size="10" font-weight="700" fill="#0C4A6E">_apply_suppression()</text>
+  <text x="320" y="328" text-anchor="middle" font-size="8.5" fill="#075985">Filter findings per suppress_by_scanner rules</text>
+
+  <line x1="320" y1="334" x2="320" y2="348" stroke="#64748B" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- _deduplicate(): x=175, w=290, cx=320 -->
+  <rect x="175" y="350" width="290" height="38" rx="6" fill="#F0F9FF" stroke="#0EA5E9" stroke-width="1.5"/>
+  <text x="320" y="368" text-anchor="middle" font-size="10" font-weight="700" fill="#0C4A6E">_deduplicate()</text>
+  <text x="320" y="382" text-anchor="middle" font-size="8.5" fill="#075985">Merge same file:line:rule_id across scanners</text>
+
+  <line x1="320" y1="388" x2="320" y2="402" stroke="#64748B" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- _filter_inline_suppressions(): x=155, w=330, cx=320 -->
+  <rect x="155" y="404" width="330" height="38" rx="6" fill="#F0F9FF" stroke="#0EA5E9" stroke-width="1.5"/>
+  <text x="320" y="422" text-anchor="middle" font-size="10" font-weight="700" fill="#0C4A6E">_filter_inline_suppressions()</text>
+  <text x="320" y="436" text-anchor="middle" font-size="8.5" fill="#075985">Remove findings with # noscan in source line</text>
+
+  <line x1="320" y1="442" x2="320" y2="458" stroke="#64748B" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- ════════════════════════════════════════ Enrichment -->
+  <!-- x=115, w=410, cx=320 -->
+  <rect x="115" y="460" width="410" height="52" rx="8" fill="#F3E8FF" stroke="#7C3AED" stroke-width="1.5"/>
+  <text x="320" y="479" text-anchor="middle" font-size="10" font-weight="700" fill="#4C1D95">RemediationEngine.enrich()  +  RegulationEngine.enrich()</text>
+  <text x="320" y="496" text-anchor="middle" font-size="8.5" fill="#5B21B6">Adds category · severity · fix_steps · CWE/OWASP refs · regulations to each Finding</text>
+  <text x="320" y="509" text-anchor="middle" font-size="8"   fill="#6D28D9">remediation/engine.py  ·  remediation/regulation_engine.py</text>
+
+  <line x1="320" y1="512" x2="320" y2="530" stroke="#64748B" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- ══════════════════════════════════ Report (cached) -->
+  <!-- x=155, w=310, cx=310... adjust to cx=320: x=165, w=310 -->
+  <rect x="160" y="532" width="320" height="44" rx="8" fill="#EFF6FF" stroke="#3B82F6" stroke-width="1.5"/>
+  <text x="320" y="552" text-anchor="middle" font-size="10" font-weight="700" fill="#1E3A8A">Report  (cached in memory)</text>
+  <text x="320" y="568" text-anchor="middle" font-size="8.5" fill="#1D4ED8">report.build_summary()  ·  _cache_report()</text>
+
+  <!-- Fan: Report → Reporters -->
+  <line x1="320" y1="576" x2="320" y2="590" stroke="#64748B" stroke-width="1.5"/>
+  <line x1="163" y1="590" x2="477" y2="590" stroke="#64748B" stroke-width="1.5"/>
+  <line x1="163" y1="590" x2="163" y2="604" stroke="#64748B" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="477" y1="590" x2="477" y2="604" stroke="#64748B" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- ══════════════════════════════════════════ Reporters -->
+
+  <!-- render_console: x=28, w=270, cx=163 -->
+  <rect x="28" y="604" width="270" height="48" rx="6" fill="#F0FDF4" stroke="#16A34A" stroke-width="1.5"/>
+  <text x="163" y="623" text-anchor="middle" font-size="10" font-weight="700" fill="#14532D">render_console(report)</text>
+  <text x="163" y="638" text-anchor="middle" font-size="8.5" fill="#166534">reporting/console.py</text>
+  <text x="163" y="648" text-anchor="middle" font-size="8"   fill="#166534">Rich terminal tables</text>
+
+  <!-- render_file: x=342, w=270, cx=477 -->
+  <rect x="342" y="604" width="270" height="48" rx="6" fill="#F0FDF4" stroke="#16A34A" stroke-width="1.5"/>
+  <text x="477" y="623" text-anchor="middle" font-size="10" font-weight="700" fill="#14532D">render_markdown / html / json</text>
+  <text x="477" y="638" text-anchor="middle" font-size="8.5" fill="#166534">markdown · html · json reporters</text>
+  <text x="477" y="648" text-anchor="middle" font-size="8"   fill="#166534">Jinja2 templates + structured output</text>
+
+  <!-- Arrows: Reporters → Outputs -->
+  <line x1="163" y1="652" x2="163" y2="668" stroke="#64748B" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="477" y1="652" x2="477" y2="668" stroke="#64748B" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- ════════════════════════════════════════ Output Destinations -->
+
+  <!-- stdout/Rich: x=28, w=270, cx=163 -->
+  <rect x="28" y="668" width="270" height="42" rx="6" fill="#F1F5F9" stroke="#64748B" stroke-width="1.5"/>
+  <text x="163" y="687" text-anchor="middle" font-size="10" font-weight="700" fill="#334155">stdout  (Rich display)</text>
+  <text x="163" y="703" text-anchor="middle" font-size="8.5" fill="#475569">terminal / CI/CD console</text>
+
+  <!-- file output: x=342, w=270, cx=477 -->
+  <rect x="342" y="668" width="270" height="42" rx="6" fill="#F1F5F9" stroke="#64748B" stroke-width="1.5"/>
+  <text x="477" y="687" text-anchor="middle" font-size="10" font-weight="700" fill="#334155">File output  (--output flag)</text>
+  <text x="477" y="703" text-anchor="middle" font-size="8.5" fill="#475569">.md / .html / .json report file</text>
+
+  <!-- ═══════════════════════════════════════════════════ Legend -->
+  <line x1="28" y1="726" x2="612" y2="726" stroke="#E2E8F0" stroke-width="1"/>
+  <line x1="33"  y1="738" x2="65"  y2="738" stroke="#64748B" stroke-width="1.5"/>
+  <text x="70"  y="742" font-size="8.5" fill="#64748B">Solid: primary data flow</text>
+  <line x1="205" y1="738" x2="237" y2="738" stroke="#94A3B8" stroke-width="1.5" stroke-dasharray="5,3"/>
+  <text x="242" y="742" font-size="8.5" fill="#94A3B8">Dashed: optional / Tier 2+ (SonarQube)</text>
+  <rect x="410" y="730" width="10" height="10" rx="2" fill="#F0F9FF" stroke="#0EA5E9" stroke-width="1.5"/>
+  <text x="425" y="742" font-size="8.5" fill="#0EA5E9">Pipeline processing step</text>
+
+</svg>

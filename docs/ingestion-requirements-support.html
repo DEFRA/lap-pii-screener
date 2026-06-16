@@ -1,0 +1,1064 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PII-Screener — Requirements Support Matrix</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f4f6f9;
+      color: #1e2330;
+      padding: 2rem 1.5rem 4rem;
+    }
+
+    header {
+      max-width: 960px;
+      margin: 0 auto 2.5rem;
+    }
+    header h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: #111827;
+    }
+    header p {
+      margin-top: .4rem;
+      color: #6b7280;
+      font-size: .95rem;
+    }
+
+    .legend {
+      display: flex;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+      margin-top: 1rem;
+      font-size: .85rem;
+    }
+    .legend span { display: flex; align-items: center; gap: .4rem; }
+    .dot {
+      width: 10px; height: 10px; border-radius: 50%; display: inline-block;
+    }
+    .dot-yes    { background: #22c55e; }
+    .dot-partial{ background: #f59e0b; }
+    .dot-no     { background: #ef4444; }
+
+    .section-card {
+      max-width: 960px;
+      margin: 0 auto 2rem;
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.08);
+      overflow: hidden;
+    }
+
+    .section-header {
+      display: flex;
+      align-items: baseline;
+      gap: .75rem;
+      padding: 1rem 1.5rem;
+      background: #1e2330;
+      color: #fff;
+    }
+    .section-header .fr-id {
+      font-size: .75rem;
+      font-weight: 700;
+      letter-spacing: .08em;
+      background: #374151;
+      padding: .2rem .55rem;
+      border-radius: 4px;
+      white-space: nowrap;
+    }
+    .section-header h2 {
+      font-size: 1rem;
+      font-weight: 600;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: .875rem;
+    }
+    thead th {
+      text-align: left;
+      padding: .6rem 1.5rem;
+      background: #f9fafb;
+      border-bottom: 1px solid #e5e7eb;
+      font-size: .75rem;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: #6b7280;
+    }
+    tbody tr { border-bottom: 1px solid #f3f4f6; }
+    tbody tr:last-child { border-bottom: none; }
+    tbody td { padding: .65rem 1.5rem; vertical-align: top; }
+
+    .col-format { width: 34%; font-weight: 500; }
+    .col-status { width: 14%; white-space: nowrap; }
+    .col-notes  { width: 52%; color: #4b5563; }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: .35rem;
+      font-size: .78rem;
+      font-weight: 600;
+      padding: .2rem .6rem;
+      border-radius: 20px;
+      white-space: nowrap;
+    }
+    .badge-yes     { background: #dcfce7; color: #15803d; }
+    .badge-partial { background: #fef3c7; color: #b45309; }
+    .badge-no      { background: #fee2e2; color: #b91c1c; }
+
+    .summary-bar {
+      max-width: 960px;
+      margin: 0 auto 2rem;
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.08);
+      padding: 1.25rem 1.5rem;
+    }
+    .summary-bar h3 {
+      font-size: .85rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .07em;
+      color: #6b7280;
+      margin-bottom: .9rem;
+    }
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 1rem;
+    }
+    .summary-cell {
+      text-align: center;
+      padding: .75rem;
+      border-radius: 8px;
+      background: #f9fafb;
+    }
+    .summary-cell .big { font-size: 2rem; font-weight: 700; }
+    .summary-cell .lbl { font-size: .75rem; color: #6b7280; margin-top: .25rem; }
+    .big-yes     { color: #16a34a; }
+    .big-partial { color: #d97706; }
+    .big-no      { color: #dc2626; }
+
+    footer {
+      max-width: 960px;
+      margin: 0 auto;
+      font-size: .78rem;
+      color: #9ca3af;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>PII-Screener — Requirements Support Matrix</h1>
+  <p>Assessed against FR-ING-001–007, FR-DET-001–003, FR-CLS-001–002, FR-RPT-001–005, NFR-P-001–006 &nbsp;|&nbsp; Updated 2026-06-15</p>
+  <div class="legend">
+    <span><span class="dot dot-yes"></span> Supported</span>
+    <span><span class="dot dot-partial"></span> Partial support</span>
+    <span><span class="dot dot-no"></span> Not supported</span>
+  </div>
+</header>
+
+<!-- ─── Summary ─────────────────────────────────────────────────────────── -->
+<div class="summary-bar">
+  <h3>Overall Coverage</h3>
+  <div class="summary-grid">
+    <div class="summary-cell"><div class="big big-yes">48</div><div class="lbl">Supported</div></div>
+    <div class="summary-cell"><div class="big big-partial">12</div><div class="lbl">Partial</div></div>
+    <div class="summary-cell"><div class="big big-no">21</div><div class="lbl">Not Supported</div></div>
+    <div class="summary-cell"><div class="big">81</div><div class="lbl">Total Items</div></div>
+  </div>
+</div>
+
+<!-- ─── FR-ING-001 ───────────────────────────────────────────────────────── -->
+<div class="section-card">
+  <div class="section-header">
+    <span class="fr-id">FR-ING-001</span>
+    <h2>Structured File Ingestion</h2>
+  </div>
+  <table>
+    <thead><tr><th class="col-format">Format</th><th class="col-status">Status</th><th class="col-notes">Notes</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="col-format">Comma-Separated Values (.csv)</td>
+        <td class="col-status"><span class="badge badge-yes">✓ Supported</span></td>
+        <td class="col-notes">Full support including column-header context scanning and NER-confirmed person-name detection.</td>
+      </tr>
+      <tr>
+        <td class="col-format">Tab-Separated Values (.tsv)</td>
+        <td class="col-status"><span class="badge badge-yes">✓ Supported</span></td>
+        <td class="col-notes">Same column-context pipeline as CSV; delimiter auto-detected.</td>
+      </tr>
+      <tr>
+        <td class="col-format">Microsoft Excel (.xlsx)</td>
+        <td class="col-status"><span class="badge badge-yes">✓ Supported</span></td>
+        <td class="col-notes">Cell values extracted from all worksheets via <code>openpyxl</code> (optional dep; skipped gracefully if not installed). Install with <code>pip install pii-screener[docs]</code>.</td>
+      </tr>
+      <tr>
+        <td class="col-format">Microsoft Excel (.xls)</td>
+        <td class="col-status"><span class="badge badge-yes">✓ Supported</span></td>
+        <td class="col-notes">Cell values extracted from all sheets via <code>xlrd</code> (optional dep). Install with <code>pip install pii-screener[docs]</code>.</td>
+      </tr>
+      <tr>
+        <td class="col-format">Apache Parquet (.parquet)</td>
+        <td class="col-status"><span class="badge badge-yes">✓ Supported</span></td>
+        <td class="col-notes">All column values from all row groups extracted via <code>pyarrow</code> (optional dep). Install with <code>pip install pii-screener[docs]</code>.</td>
+      </tr>
+      <tr>
+        <td class="col-format">Apache ORC (.orc)</td>
+        <td class="col-status"><span class="badge badge-yes">✓ Supported</span></td>
+        <td class="col-notes">All column values extracted via <code>pyarrow</code> (same dep as .parquet; optional). Install with <code>pip install pii-screener[docs]</code>.</td>
+      </tr>
+      <tr>
+        <td class="col-format">SQL dump files (.sql)</td>
+        <td class="col-status"><span class="badge badge-yes">✓ Supported</span></td>
+        <td class="col-notes">Scanned as plain text; all PII patterns applied. INSERT statement values are matched by regex.</td>
+      </tr>
+      <tr>
+        <td class="col-format">Pipe-Separated Values (.psv)</td>
+        <td class="col-status"><span class="badge badge-yes">✓ Supported</span></td>
+        <td class="col-notes">Full support including column-header context scanning and NER-confirmed person-name detection; same pipeline as CSV/TSV. Delimiter auto-detected.</td>
+      </tr>
+      <tr>
+        <td class="col-format">Fixed-width text files</td>
+        <td class="col-status"><span class="badge badge-no">✗ Not Supported</span></td>
+        <td class="col-notes">No column-width schema support. Files would be scanned as raw text, losing column context and producing false positives.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ─── FR-ING-002 ───────────────────────────────────────────────────────── -->
+<div class="section-card">
+  <div class="section-header">
+    <span class="fr-id">FR-ING-002</span>
+    <h2>Unstructured Document Ingestion</h2>
+  </div>
+  <table>
+    <thead><tr><th class="col-format">Format</th><th class="col-status">Status</th><th class="col-notes">Notes</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="col-format">Microsoft Word (.docx)</td>
+        <td class="col-status"><span class="badge badge-yes">✓ Supported</span></td>
+        <td class="col-notes">Paragraphs and table cells extracted via <code>python-docx</code> (optional dep). Install with <code>pip install pii-screener[docs]</code>.</td>
+      </tr>
+      <tr>
+        <td class="col-format">Microsoft Word (.doc)</td>
+        <td class="col-status"><span class="badge badge-yes">✓ Supported</span></td>
+        <td class="col-notes">Text extracted from all OLE streams via <code>olefile</code> (optional dep); printable ASCII and UTF-16 LE runs captured. Install with <code>pip install pii-screener[docs]</code>.</td>
+      </tr>
+      <tr>
+        <td class="col-format">PDF — text-based</td>
+        <td class="col-status"><span class="badge badge-yes">✓ Supported</span></td>
+        <td class="col-notes">Text layer extracted via <code>pdfminer.six</code> (optional dep). Scanned PDFs (image-only) are not supported. Install with <code>pip install pii-screener[docs]</code>.</td>
+      </tr>
+      <tr>
+        <td class="col-format">PDF — scanned / image-based</td>
+        <td class="col-status"><span class="badge badge-no">✗ Not Supported</span></td>
+        <td class="col-notes">Requires OCR pipeline: <code>pdf2image</code> + <code>pytesseract</code> or a cloud Vision API.</td>
+      </tr>
+      <tr>
+        <td class="col-format">Plain text (.txt, .log, .md)</td>
+        <td class="col-status"><span class="badge badge-yes">✓ Supported</span></td>
+        <td class="col-notes">All three extensions are in the supported set and scanned with the full pattern + NER pipeline.</td>
+      </tr>
+      <tr>
+        <td class="col-format">Rich Text Format (.rtf)</td>
+        <td class="col-status"><span class="badge badge-yes">✓ Supported</span></td>
+        <td class="col-notes">RTF control words stripped via <code>striprtf</code> (optional dep). Install with <code>pip install pii-screener[docs]</code>.</td>
+      </tr>
+      <tr>
+        <td class="col-format">HTML and XHTML</td>
+        <td class="col-status"><span class="badge badge-partial">~ Partial</span></td>
+        <td class="col-notes">.html/.htm scanned as raw text. PII in content is detected but HTML tags may generate noise. No DOM-aware parsing to skip <code>&lt;script&gt;</code>/<code>&lt;style&gt;</code> blocks.</td>
+      </tr>
+      <tr>
+        <td class="col-format">XML</td>
+        <td class="col-status"><span class="badge badge-partial">~ Partial</span></td>
+        <td class="col-notes">.xml scanned as raw text. Attribute values and element content are matched but XML schema context is not used.</td>
+      </tr>
+      <tr>
+        <td class="col-format">Email files (.eml)</td>
+        <td class="col-status"><span class="badge badge-yes">✓ Supported</span></td>
+        <td class="col-notes">Headers (From, To, Cc, Bcc, Subject…) and all text/* MIME parts extracted via Python stdlib <code>email</code> module — no extra dependencies required.</td>
+      </tr>
+      <tr>
+        <td class="col-format">Email files (.msg)</td>
+        <td class="col-status"><span class="badge badge-yes">✓ Supported</span></td>
+        <td class="col-notes">Sender, recipients, subject, and body extracted via <code>extract-msg</code> (optional dep). Install with <code>pip install pii-screener[docs]</code>.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ─── FR-ING-003 ───────────────────────────────────────────────────────── -->
+<div class="section-card">
+  <div class="section-header">
+    <span class="fr-id">FR-ING-003</span>
+    <h2>Semi-Structured &amp; Encoded Data</h2>
+  </div>
+  <table>
+    <thead><tr><th class="col-format">Format / Encoding</th><th class="col-status">Status</th><th class="col-notes">Notes</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="col-format">JSON</td>
+        <td class="col-status"><span class="badge badge-yes">✓ Supported</span></td>
+        <td class="col-notes">Scanned as text — all regex patterns work across nested, minified, and array-of-objects structures.</td>
+      </tr>
+      <tr>
+        <td class="col-format">YAML</td>
+        <td class="col-status"><span class="badge badge-yes">✓ Supported</span></td>
+        <td class="col-notes">Both .yml and .yaml extensions supported. Config files and data feeds scanned fully.</td>
+      </tr>
+      <tr>
+        <td class="col-format">AVRO</td>
+        <td class="col-status"><span class="badge badge-yes">✓ Supported</span></td>
+        <td class="col-notes">All record field values deserialised and scanned via <code>fastavro</code> (optional dep). Install with <code>pip install pii-screener[docs]</code>.</td>
+      </tr>
+      <tr>
+        <td class="col-format">Base64-encoded strings</td>
+        <td class="col-status"><span class="badge badge-yes">✓ Supported</span></td>
+        <td class="col-notes">Base64 blobs (≥24 chars) in scanned text are decoded and re-scanned for PII using all regex patterns (stdlib only, no extra deps).</td>
+      </tr>
+      <tr>
+        <td class="col-format">URL-encoded strings</td>
+        <td class="col-status"><span class="badge badge-yes">✓ Supported</span></td>
+        <td class="col-notes">Consecutive percent-encoded sequences are decoded via <code>urllib.parse.unquote</code> and re-scanned inline (stdlib only).</td>
+      </tr>
+      <tr>
+        <td class="col-format">JWT tokens — detection</td>
+        <td class="col-status"><span class="badge badge-yes">✓ Supported</span></td>
+        <td class="col-notes">JWT pattern (<code>eyJ…eyJ…sig</code>) detected and flagged as high-severity <code>jwt_token</code>.</td>
+      </tr>
+      <tr>
+        <td class="col-format">JWT tokens — payload decode &amp; scan</td>
+        <td class="col-status"><span class="badge badge-yes">✓ Supported</span></td>
+        <td class="col-notes">JWT payload (second segment) is Base64url-decoded and re-scanned for embedded PII claims (stdlib only).</td>
+      </tr>
+      <tr>
+        <td class="col-format">Protobuf / MessagePack</td>
+        <td class="col-status"><span class="badge badge-no">✗ Not Supported</span></td>
+        <td class="col-notes">Schema-dependent binary formats. Significant implementation complexity; not planned without schema provision.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ─── FR-ING-004 ───────────────────────────────────────────────────────── -->
+<div class="section-card">
+  <div class="section-header">
+    <span class="fr-id">FR-ING-004</span>
+    <h2>Archive &amp; Compressed File Traversal</h2>
+  </div>
+  <table>
+    <thead><tr><th class="col-format">Format</th><th class="col-status">Status</th><th class="col-notes">Notes</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="col-format">ZIP</td>
+        <td class="col-status"><span class="badge badge-yes">✓ Supported</span></td>
+        <td class="col-notes">Every file entry is extracted via stdlib <code>zipfile</code> and scanned (text, binary docs, nested archives).</td>
+      </tr>
+      <tr>
+        <td class="col-format">GZIP single-file (.gz)</td>
+        <td class="col-status"><span class="badge badge-yes">✓ Supported</span></td>
+        <td class="col-notes">Decompressed via stdlib <code>gzip</code>; inner file scanned by extension.</td>
+      </tr>
+      <tr>
+        <td class="col-format">TAR / .tar.gz / .tgz</td>
+        <td class="col-status"><span class="badge badge-yes">✓ Supported</span></td>
+        <td class="col-notes">All members extracted via stdlib <code>tarfile</code>; plain .tar, gzip-compressed (.tar.gz/.tgz), and bzip2-compressed (.tar.bz2) all handled.</td>
+      </tr>
+      <tr>
+        <td class="col-format">BZIP2 single-file (.bz2)</td>
+        <td class="col-status"><span class="badge badge-yes">✓ Supported</span></td>
+        <td class="col-notes">Decompressed via stdlib <code>bz2</code>; inner file scanned by extension.</td>
+      </tr>
+      <tr>
+        <td class="col-format">7-Zip (.7z)</td>
+        <td class="col-status"><span class="badge badge-no">✗ Not Supported</span></td>
+        <td class="col-notes">Requires third-party <code>py7zr</code> library; not included to avoid mandatory dependency.</td>
+      </tr>
+      <tr>
+        <td class="col-format">Nested archives (configurable depth)</td>
+        <td class="col-status"><span class="badge badge-yes">✓ Supported</span></td>
+        <td class="col-notes">Archives within archives are recursed up to <code>_MAX_ARCHIVE_DEPTH</code> (default 10). Nested entries that are themselves archives trigger a recursive scan.</td>
+      </tr>
+      <tr>
+        <td class="col-format">Depth-exceeded warning &amp; skip</td>
+        <td class="col-status"><span class="badge badge-yes">✓ Supported</span></td>
+        <td class="col-notes">If nesting depth exceeds the limit, a warning is printed to stderr and that branch is skipped gracefully without crashing.</td>
+      </tr>      
+      <tr>
+        <td class="col-format">Password-protected ZIP</td>
+        <td class="col-status"><span class="badge badge-no">✗ Not Supported</span></td>
+        <td class="col-notes">Encrypted entries raise an exception which is caught and silently skipped — no warning is printed. Content cannot be scanned without the password.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ─── FR-ING-005 ───────────────────────────────────────────────────────── -->
+<div class="section-card">
+  <div class="section-header">
+    <span class="fr-id">FR-ING-005</span>
+    <h2>Image Processing</h2>
+  </div>
+  <table>
+    <thead><tr><th class="col-format">Capability</th><th class="col-status">Status</th><th class="col-notes">Notes</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="col-format">OCR scanning (JPEG, PNG, TIFF, BMP, WEBP, HEIC, GIF)</td>
+        <td class="col-status"><span class="badge badge-no">✗ Not Supported</span></td>
+        <td class="col-notes">Image files are skipped entirely. Requires <code>pytesseract</code> + <code>Pillow</code> (or a cloud Vision API) for OCR.</td>
+      </tr>
+      <tr>
+        <td class="col-format">Image pre-processing (deskew, contrast, noise reduction)</td>
+        <td class="col-status"><span class="badge badge-no">✗ Not Supported</span></td>
+        <td class="col-notes">Requires <code>OpenCV</code> or <code>Pillow</code> pre-processing pipeline before OCR.</td>
+      </tr>
+      <tr>
+        <td class="col-format">EXIF metadata extraction (GPS, device ID, timestamps)</td>
+        <td class="col-status"><span class="badge badge-no">✗ Not Supported</span></td>
+        <td class="col-notes">Requires <code>Pillow</code> (<code>ExifTags</code>) or <code>exifread</code>. GPS coordinates are a common PII risk not yet covered.</td>
+      </tr>
+      <tr>
+        <td class="col-format">Configurable OCR confidence thresholds</td>
+        <td class="col-status"><span class="badge badge-no">✗ Not Supported</span></td>
+        <td class="col-notes">Depends on OCR being implemented. Tesseract and cloud APIs both expose confidence scores.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ─── FR-ING-006 ───────────────────────────────────────────────────────── -->
+<div class="section-card">
+  <div class="section-header">
+    <span class="fr-id">FR-ING-006</span>
+    <h2>Source Code Scanning</h2>
+  </div>
+  <table>
+    <thead><tr><th class="col-format">Capability</th><th class="col-status">Status</th><th class="col-notes">Notes</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="col-format">Python, JS/TS, Java, C#, C/C++, Go, Ruby, PHP, Bash/Shell, PowerShell</td>
+        <td class="col-status"><span class="badge badge-yes">✓ Supported</span></td>
+        <td class="col-notes">All extensions (.py .js .ts .jsx .tsx .java .cs .cpp .c .h .go .rb .php .sh .bash .zsh .ps1 .psm1) are in the supported set.</td>
+      </tr>
+      <tr>
+        <td class="col-format">Infrastructure-as-Code (Terraform, Ansible, Dockerfile, K8s)</td>
+        <td class="col-status"><span class="badge badge-yes">✓ Supported</span></td>
+        <td class="col-notes">.tf, .tfvars, .hcl, and .yml/.yaml (Ansible/K8s) are all in the supported extension set. Dockerfile (no extension) is also scanned — the scanner’s extension filter allows any extensionless file to pass through (<code>path.suffix == ""</code> bypasses the allowlist check).</td>
+      </tr>
+      <tr>
+        <td class="col-format">Config files (.env, .properties, appsettings.json, web.config)</td>
+        <td class="col-status"><span class="badge badge-partial">~ Partial</span></td>
+        <td class="col-notes">.env, .properties, and .json are all in the supported extension set (covering <code>appsettings.json</code>, <code>appsettings.Development.json</code>, etc.). web.config uses the <code>.config</code> extension which is <strong>not</strong> in the extension allowlist — these files are skipped.</td>
+      </tr>
+      <tr>
+        <td class="col-format">String literal vs code logic distinction (low false positives)</td>
+        <td class="col-status"><span class="badge badge-partial">~ Partial</span></td>
+        <td class="col-notes">String-literal extraction and NER confirmation reduce false positives for person names. Regex-based patterns (email, SSN, etc.) match anywhere on the line including variable names.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ─── FR-ING-007 ───────────────────────────────────────────────────────── -->
+<div class="section-card">
+  <div class="section-header">
+    <span class="fr-id">FR-ING-007</span>
+    <h2>Database Direct Connectivity</h2>
+  </div>
+  <table>
+    <thead><tr><th class="col-format">Capability</th><th class="col-status">Status</th><th class="col-notes">Notes</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="col-format">RDBMS (PostgreSQL, MySQL/MariaDB, MSSQL, Oracle, Db2, SQLite)</td>
+        <td class="col-status"><span class="badge badge-no">✗ Not Supported</span></td>
+        <td class="col-notes">No live database connectivity. SQL dump files (.sql) can be scanned as text as a workaround.</td>
+      </tr>
+      <tr>
+        <td class="col-format">NoSQL (MongoDB, Cassandra, Redis, Elasticsearch)</td>
+        <td class="col-status"><span class="badge badge-no">✗ Not Supported</span></td>
+        <td class="col-notes">No connector support. JSON exports from MongoDB can be scanned as flat .json files.</td>
+      </tr>
+      <tr>
+        <td class="col-format">Cloud-native (AWS RDS, Azure SQL, Cloud Spanner, Snowflake, Databricks)</td>
+        <td class="col-status"><span class="badge badge-no">✗ Not Supported</span></td>
+        <td class="col-notes">No cloud database connectors implemented.</td>
+      </tr>
+      <tr>
+        <td class="col-format">Read-only connections</td>
+        <td class="col-status"><span class="badge badge-no">✗ Not Supported</span></td>
+        <td class="col-notes">Depends on database connectivity being implemented. The scanner does not write to any data source by design.</td>
+      </tr>
+      <tr>
+        <td class="col-format">Column-level sampling (configurable row limit)</td>
+        <td class="col-status"><span class="badge badge-no">✗ Not Supported</span></td>
+        <td class="col-notes">Depends on database connectivity. No row-limit or sampling configuration exists.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ─── FR-DET-001 ───────────────────────────────────────────────────────── -->
+<div class="section-card">
+  <div class="section-header">
+    <span class="fr-id">FR-DET-001</span>
+    <h2>UK-Specific PII Patterns</h2>
+  </div>
+  <table>
+    <thead><tr><th class="col-format">Data Category</th><th class="col-status">Status</th><th class="col-notes">Notes</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="col-format">Full name (NER)</td>
+        <td class="col-status"><span class="badge badge-partial">~ Partial</span></td>
+        <td class="col-notes">Presidio and spaCy NER detect person names in string literals and comments. Not fine-tuned on a UK English corpus; titles (Dr, Prof) not specifically handled.</td>
+      </tr>
+      <tr>
+        <td class="col-format">Email address</td>
+        <td class="col-status"><span class="badge badge-yes">✓ Supported</span></td>
+        <td class="col-notes">Generic email regex matches all domains including .co.uk. Rule ID: <code>pii_email</code>.</td>
+      </tr>
+      <tr>
+        <td class="col-format">UK phone number (+44 / 07xxx)</td>
+        <td class="col-status"><span class="badge badge-partial">~ Partial</span></td>
+        <td class="col-notes">Dedicated UK mobile rule added: <code>pii_uk_phone_mobile</code> covers <code>07xxx xxxxxx</code>, <code>+44 7xxx xxxxxx</code>, <code>0044 7xxx xxxxxx</code>. Generic E.164 (<code>pii_phone_intl</code>) also matches. UK landlines not explicitly covered.</td>
+      </tr>
+      <tr>
+        <td class="col-format">UK postcode (SW1A 2AA)</td>
+        <td class="col-status"><span class="badge badge-yes">✓ Supported</span></td>
+        <td class="col-notes">Rule <code>pii_uk_postcode</code> covers all Royal Mail formats: AN, ANN, AAN, AANN, ANA, AANA. Medium severity, GDPR remediation guidance included.</td>
+      </tr>
+      <tr>
+        <td class="col-format">National Insurance Number (NINO)</td>
+        <td class="col-status"><span class="badge badge-partial">~ Partial</span></td>
+        <td class="col-notes">Structural regex present (<code>pii_ni_number</code>). Check-character validation not implemented; invalid prefix combinations not fully excluded.</td>
+      </tr>
+      <tr>
+        <td class="col-format">UK Passport Number</td>
+        <td class="col-status"><span class="badge badge-partial">~ Partial</span></td>
+        <td class="col-notes">Generic passport pattern (<code>pii_passport</code>) matches 7–9 alphanumeric chars. Not UK-specific; may produce false positives and miss UK format edge cases.</td>
+      </tr>
+      <tr>
+        <td class="col-format">UK Driving Licence (MORGA753116SM9IJ)</td>
+        <td class="col-status"><span class="badge badge-yes">✓ Supported</span></td>
+        <td class="col-notes">Rule <code>pii_uk_driving_licence</code>: 5 surname chars (9-padded) + 6 DOB digits + 2 random alphanum + 1 digit + 2 letters = 16-char structural match. High severity.</td>
+      </tr>
+      <tr>
+        <td class="col-format">NHS Number (3-3-4 with check digit)</td>
+        <td class="col-status"><span class="badge badge-yes">✓ Supported</span></td>
+        <td class="col-notes">Rule <code>pii_nhs_number</code>: 3-3-4 digit pattern with full modulus-11 check digit validation (<code>_nhs_check</code>). Invalid numbers are rejected. High severity, NHS DSP Toolkit references included.</td>
+      </tr>
+      <tr>
+        <td class="col-format">Bank Sort Code &amp; Account Number</td>
+        <td class="col-status"><span class="badge badge-yes">✓ Supported</span></td>
+        <td class="col-notes">Two rules: <code>pii_uk_sort_code</code> (keyword-contextual: requires sort[-_]code near the value) and <code>pii_uk_account_number</code> (keyword-contextual: requires account number/no/num). High severity, PSD2 and PCI DSS references.</td>
+      </tr>
+      <tr>
+        <td class="col-format">Payment Card Number (PAN, Luhn-validated)</td>
+        <td class="col-status"><span class="badge badge-yes">✓ Supported</span></td>
+        <td class="col-notes">Visa, Mastercard, Amex, Discover, Diners patterns with Luhn validation. Rule ID: <code>pii_credit_card</code>.</td>
+      </tr>
+      <tr>
+        <td class="col-format">BIC / IBAN (GB format)</td>
+        <td class="col-status"><span class="badge badge-partial">~ Partial</span></td>
+        <td class="col-notes">Generic IBAN regex present (<code>pii_iban</code>). Matches GB IBANs structurally but no IBAN check-digit (modulus 97) validation is performed.</td>
+      </tr>
+      <tr>
+        <td class="col-format">Date of Birth</td>
+        <td class="col-status"><span class="badge badge-yes">✓ Supported</span></td>
+        <td class="col-notes">Two rules: <code>pii_dob</code> (YYYY-MM-DD / YYYY/MM/DD) and new <code>pii_dob_uk</code> (DD/MM/YYYY). Both UK and ISO date formats now covered.</td>
+      </tr>
+      <tr>
+        <td class="col-format">IP Address (IPv4)</td>
+        <td class="col-status"><span class="badge badge-partial">~ Partial</span></td>
+        <td class="col-notes">IPv4 inside string literals detected (<code>pii_ip_address</code>). No context-dependent classification (public vs private ranges). Low severity.</td>
+      </tr>
+      <tr>
+        <td class="col-format">IP Address (IPv6)</td>
+        <td class="col-status"><span class="badge badge-yes">✓ Supported</span></td>
+        <td class="col-notes">Rule <code>pii_ipv6_address</code> covers full 8-group colon-hex form. Compressed forms (::1, fe80::) not covered to avoid false positives.</td>
+      </tr>
+      <tr>
+        <td class="col-format">Device MAC Address</td>
+        <td class="col-status"><span class="badge badge-yes">✓ Supported</span></td>
+        <td class="col-notes">Rule <code>pii_mac_address</code> matches colon-separated (<code>aa:bb:cc:dd:ee:ff</code>) and hyphen-separated (<code>aa-bb-cc-dd-ee-ff</code>) formats. Low severity, GDPR Recital 30 reference.</td>
+      </tr>
+      <tr>
+        <td class="col-format">Biometric data</td>
+        <td class="col-status"><span class="badge badge-no">✗ Not Supported</span></td>
+        <td class="col-notes">No biometric keyword/context detection implemented. Requires NER + domain-specific context markers.</td>
+      </tr>
+      <tr>
+        <td class="col-format">Health / medical data (Special Category)</td>
+        <td class="col-status"><span class="badge badge-no">✗ Not Supported</span></td>
+        <td class="col-notes">No ICD-10 code detection or medical context analysis implemented.</td>
+      </tr>
+      <tr>
+        <td class="col-format">Racial / ethnic origin (Special Category)</td>
+        <td class="col-status"><span class="badge badge-no">✗ Not Supported</span></td>
+        <td class="col-notes">No contextual analysis for protected characteristic data.</td>
+      </tr>
+      <tr>
+        <td class="col-format">Political opinions (Special Category)</td>
+        <td class="col-status"><span class="badge badge-no">✗ Not Supported</span></td>
+        <td class="col-notes">No contextual analysis for political opinion data.</td>
+      </tr>
+      <tr>
+        <td class="col-format">Religious beliefs (Special Category)</td>
+        <td class="col-status"><span class="badge badge-no">✗ Not Supported</span></td>
+        <td class="col-notes">No contextual analysis for religious belief data.</td>
+      </tr>
+      <tr>
+        <td class="col-format">Sexual orientation / life (Special Category)</td>
+        <td class="col-status"><span class="badge badge-no">✗ Not Supported</span></td>
+        <td class="col-notes">No contextual analysis for sexual orientation data.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ─── FR-DET-002 ───────────────────────────────────────────────────────── -->
+<div class="section-card">
+  <div class="section-header">
+    <span class="fr-id">FR-DET-002</span>
+    <h2>Detection Techniques</h2>
+  </div>
+  <table>
+    <thead><tr><th class="col-format">Technique</th><th class="col-status">Status</th><th class="col-notes">Notes</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="col-format">Regular Expression Engine</td>
+        <td class="col-status"><span class="badge badge-yes">✓ Supported</span></td>
+        <td class="col-notes">Curated regex pattern library covering 15+ PII categories. Luhn validation implemented for payment cards. UK-specific tuning is partial (see FR-DET-001).</td>
+      </tr>
+      <tr>
+        <td class="col-format">Named Entity Recognition (NER)</td>
+        <td class="col-status"><span class="badge badge-partial">~ Partial</span></td>
+        <td class="col-notes">Presidio and spaCy supported as optional backends. General English models used — not fine-tuned on a UK English corpus. Organisations, locations, and dates not explicitly targeted beyond person names.</td>
+      </tr>
+      <tr>
+        <td class="col-format">Context-Aware Classification</td>
+        <td class="col-status"><span class="badge badge-partial">~ Partial</span></td>
+        <td class="col-notes">NER confidence scoring and string-literal extraction reduce false positives. No token-window analysis around candidate matches (e.g. no NHS number context check).</td>
+      </tr>
+      <tr>
+        <td class="col-format">Dictionary Lookups (names, places)</td>
+        <td class="col-status"><span class="badge badge-no">✗ Not Supported</span></td>
+        <td class="col-notes">No forename, surname, or UK place-name dictionary. NER partially compensates but dictionary lookups are not implemented.</td>
+      </tr>
+      <tr>
+        <td class="col-format">Entropy Analysis</td>
+        <td class="col-status"><span class="badge badge-no">✗ Not Supported</span></td>
+        <td class="col-notes">High-entropy string detection (e.g. API keys, encoded tokens) is not implemented. Gitleaks (external scanner) covers some of this for secrets.</td>
+      </tr>
+      <tr>
+        <td class="col-format">Checksum Validation (Luhn, NINO, NHS)</td>
+        <td class="col-status"><span class="badge badge-partial">~ Partial</span></td>
+        <td class="col-notes">Luhn mod-10 algorithm implemented for payment cards (<code>pii_credit_card</code>). NHS modulus-11 check digit fully implemented (<code>_nhs_check</code>) — invalid NHS numbers are rejected before a finding is raised. NINO check-character validation is not implemented; invalid prefix combinations are not fully excluded.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ─── FR-DET-003 ───────────────────────────────────────────────────────── -->
+<div class="section-card">
+  <div class="section-header">
+    <span class="fr-id">FR-DET-003</span>
+    <h2>Configurable Detection Profiles</h2>
+  </div>
+  <table>
+    <thead><tr><th class="col-format">Profile / Feature</th><th class="col-status">Status</th><th class="col-notes">Notes</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="col-format">Standard scan profile</td>
+        <td class="col-status"><span class="badge badge-partial">~ Partial</span></td>
+        <td class="col-notes">All detectors run by default. There is no formally defined "standard" profile that limits to common PII only for faster performance.</td>
+      </tr>
+      <tr>
+        <td class="col-format">Deep scan profile (all categories, full ML)</td>
+        <td class="col-status"><span class="badge badge-no">✗ Not Supported</span></td>
+        <td class="col-notes">No separate deep-scan mode. Special category data (health, biometrics, etc.) is not detected regardless of profile.</td>
+      </tr>
+      <tr>
+        <td class="col-format">Custom profile (user-defined detector subset)</td>
+        <td class="col-status"><span class="badge badge-partial">~ Partial</span></td>
+        <td class="col-notes">Rule IDs can be suppressed globally or per-scanner via <code>suppress.txt</code> or <code>sensitive-scanner.yaml</code>. Specific scanners can be disabled with <code>--scanners</code>. No named profile system exists.</td>
+      </tr>
+      <tr>
+        <td class="col-format">Allowlisting (known-clean fields / false-positive suppression)</td>
+        <td class="col-status"><span class="badge badge-partial">~ Partial</span></td>
+        <td class="col-notes">Rule-ID-level suppression and inline <code># noscan</code> comments supported. Column-name exclusion via <code>_SKIP_NAME_COL_RE</code> regex for CSV. No declarative allowlist for specific field values or field paths.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ─── FR-CLS-001 ───────────────────────────────────────────────────────── -->
+<div class="section-card">
+  <div class="section-header">
+    <span class="fr-id">FR-CLS-001</span>
+    <h2>Finding Classification</h2>
+  </div>
+  <table>
+    <thead><tr><th class="col-format">Metadata Field</th><th class="col-status">Status</th><th class="col-notes">Notes</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="col-format">PII category (taxonomy)</td>
+        <td class="col-status"><span class="badge badge-yes">✓ Supported</span></td>
+        <td class="col-notes"><code>Finding.category</code> populated for every finding (e.g. <code>pii_email</code>, <code>pii_ssn</code>, <code>hardcoded_password</code>).</td>
+      </tr>
+      <tr>
+        <td class="col-format">Sensitivity tier (Standard / High / Special Category)</td>
+        <td class="col-status"><span class="badge badge-partial">~ Partial</span></td>
+        <td class="col-notes"><code>Finding.severity</code> uses critical/high/medium/low/info scale — not the Standard/High/Special Category UK GDPR taxonomy required.</td>
+      </tr>
+      <tr>
+        <td class="col-format">Regulatory article(s) implicated (UK GDPR Art. 9 etc.)</td>
+        <td class="col-status"><span class="badge badge-partial">~ Partial</span></td>
+        <td class="col-notes"><code>Finding.regulations</code> is populated by every scanner via <code>RegulationEngine.lookup(category)</code> (e.g. <code>["UK-GDPR-PD", "PSR-2017"]</code>). Rendered as regulation-ID badges in the console, Markdown, and HTML findings tables. GDPR Article numbers ARE modelled in <code>config/regulations.yaml</code> (UK-GDPR-PD = Article 4(1), UK-GDPR-SC = Article 9(1), UK-GDPR-51F = Article 5(1)(f)) and displayed as <code>reg-article-num</code> in the HTML “Applicable Regulations” summary cards. Article numbers are not shown inline per-finding in the findings table — only the regulation ID badge is rendered there.</td>
+      </tr>
+      <tr>
+        <td class="col-format">Detection confidence (Certain / Probable / Possible)</td>
+        <td class="col-status"><span class="badge badge-partial">~ Partial</span></td>
+        <td class="col-notes"><code>Finding.confidence</code> (float 0.0–1.0) is set per scanner, boosted by the orchestrator when multiple scanners agree (+8% per agreeing scanner, capped at 99%). The HTML report renders colour-coded confidence pill badges via the <code>--show-confidence</code> flag. JSON output includes the numeric confidence value on every finding (serialised by <code>model_dump_json</code>). Not exposed as the required Certain / Probable / Possible tier; confidence is not surfaced in the Markdown report format.</td>
+      </tr>
+      <tr>
+        <td class="col-format">Source file path and line reference</td>
+        <td class="col-status"><span class="badge badge-yes">✓ Supported</span></td>
+        <td class="col-notes"><code>Finding.file</code> (relative path) and <code>Finding.line</code> (1-based) present on every finding.</td>
+      </tr>
+      <tr>
+        <td class="col-format">Column reference</td>
+        <td class="col-status"><span class="badge badge-partial">~ Partial</span></td>
+        <td class="col-notes">CSV scanner records the column header name in the message but no structured <code>column</code> field on <code>Finding</code>.</td>
+      </tr>
+      <tr>
+        <td class="col-format">Character offset</td>
+        <td class="col-status"><span class="badge badge-no">✗ Not Supported</span></td>
+        <td class="col-notes">Character offset within the line is not stored on <code>Finding</code>.</td>
+      </tr>
+      <tr>
+        <td class="col-format">Contextual snippet (configurable, redacted)</td>
+        <td class="col-status"><span class="badge badge-partial">~ Partial</span></td>
+        <td class="col-notes"><code>Finding.match</code> stores the matched value (redacted by default). No surrounding context window (±50 chars) is stored or rendered.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ─── FR-CLS-002 ───────────────────────────────────────────────────────── -->
+<div class="section-card">
+  <div class="section-header">
+    <span class="fr-id">FR-CLS-002</span>
+    <h2>Risk Scoring</h2>
+  </div>
+  <table>
+    <thead><tr><th class="col-format">Capability</th><th class="col-status">Status</th><th class="col-notes">Notes</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="col-format">Per-finding risk score</td>
+        <td class="col-status"><span class="badge badge-no">✗ Not Supported</span></td>
+        <td class="col-notes">No numeric risk score on <code>Finding</code>. Severity level (critical/high/medium/low) is the closest equivalent.</td>
+      </tr>
+      <tr>
+        <td class="col-format">Aggregate risk score per data source</td>
+        <td class="col-status"><span class="badge badge-no">✗ Not Supported</span></td>
+        <td class="col-notes"><code>ScanSummary</code> aggregates counts by severity/category/scanner but does not compute a weighted risk score.</td>
+      </tr>
+      <tr>
+        <td class="col-format">Sensitivity-tier weighting</td>
+        <td class="col-status"><span class="badge badge-no">✗ Not Supported</span></td>
+        <td class="col-notes">No tier weighting (Special = 10, High = 5, Standard = 1) applied.</td>
+      </tr>
+      <tr>
+        <td class="col-format">Production vs non-production context</td>
+        <td class="col-status"><span class="badge badge-no">✗ Not Supported</span></td>
+        <td class="col-notes">No environment classification or context detection.</td>
+      </tr>
+      <tr>
+        <td class="col-format">Encryption-at-rest detection</td>
+        <td class="col-status"><span class="badge badge-no">✗ Not Supported</span></td>
+        <td class="col-notes">No detection of encryption controls around scanned data.</td>
+      </tr>
+      <tr>
+        <td class="col-format">Lawful basis identification</td>
+        <td class="col-status"><span class="badge badge-no">✗ Not Supported</span></td>
+        <td class="col-notes">No lawful basis (consent, legitimate interest, etc.) identification or absence detection.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ─── FR-RPT-001 ───────────────────────────────────────────────────────── -->
+<div class="section-card">
+  <div class="section-header">
+    <span class="fr-id">FR-RPT-001</span>
+    <h2>Executive Summary Report</h2>
+  </div>
+  <table>
+    <thead><tr><th class="col-format">Element</th><th class="col-status">Status</th><th class="col-notes">Notes</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="col-format">Total files scanned</td>
+        <td class="col-status"><span class="badge badge-yes">✓ Supported</span></td>
+        <td class="col-notes"><code>ScanSummary.files_scanned</code> tracks every file touched by the PII scanner (including archive members). Shown in console summary table, HTML stat card, Markdown summary table, and included in JSON output.</td>
+      </tr>
+      <tr>
+        <td class="col-format">Total findings by tier</td>
+        <td class="col-status"><span class="badge badge-partial">~ Partial</span></td>
+        <td class="col-notes">Findings counted by severity (critical/high/medium/low/info) in <code>ScanSummary</code>. Not mapped to Standard/High/Special Category tiers.</td>
+      </tr>
+      <tr>
+        <td class="col-format">Compliance status (Compliant / Non-Compliant / Requires Review)</td>
+        <td class="col-status"><span class="badge badge-no">✗ Not Supported</span></td>
+        <td class="col-notes">No compliance status field. The <code>--fail-on</code> CLI flag provides a binary pass/fail exit code only.</td>
+      </tr>
+      <tr>
+        <td class="col-format">Recommended priority actions</td>
+        <td class="col-status"><span class="badge badge-partial">~ Partial</span></td>
+        <td class="col-notes">Per-finding remediation steps (<code>Finding.fix_steps</code>) present. No rolled-up executive priority action list in reports.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ─── FR-RPT-002 ───────────────────────────────────────────────────────── -->
+<div class="section-card">
+  <div class="section-header">
+    <span class="fr-id">FR-RPT-002</span>
+    <h2>Detailed Findings Report</h2>
+  </div>
+  <table>
+    <thead><tr><th class="col-format">Element</th><th class="col-status">Status</th><th class="col-notes">Notes</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="col-format">Full finding inventory with source references</td>
+        <td class="col-status"><span class="badge badge-yes">✓ Supported</span></td>
+        <td class="col-notes">All findings with file, line, category, severity, match, and message included in HTML, Markdown, JSON, and console reports.</td>
+      </tr>
+      <tr>
+        <td class="col-format">Risk scores per finding</td>
+        <td class="col-status"><span class="badge badge-no">✗ Not Supported</span></td>
+        <td class="col-notes">See FR-CLS-002 — risk scoring not implemented.</td>
+      </tr>
+      <tr>
+        <td class="col-format">Applicable regulations per finding</td>
+        <td class="col-status"><span class="badge badge-partial">~ Partial</span></td>
+        <td class="col-notes"><code>Finding.regulations</code> is populated by every scanner and rendered in the console, Markdown, and HTML reports. The HTML report includes an "Applicable Regulations" summary section with statutory references. Specific GDPR/DPA article citations are not modelled — see FR-CLS-001.</td>
+      </tr>
+      <tr>
+        <td class="col-format">Recommended remediation per finding</td>
+        <td class="col-status"><span class="badge badge-yes">✓ Supported</span></td>
+        <td class="col-notes"><code>Finding.remediation_description</code> and <code>Finding.fix_steps</code> populated from <code>remediation/rules.yaml</code> and rendered in all report formats.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ─── FR-RPT-003 ───────────────────────────────────────────────────────── -->
+<div class="section-card">
+  <div class="section-header">
+    <span class="fr-id">FR-RPT-003</span>
+    <h2>Non-Compliant File Index</h2>
+  </div>
+  <table>
+    <thead><tr><th class="col-format">Element</th><th class="col-status">Status</th><th class="col-notes">Notes</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="col-format">Index of non-compliant files / data sources</td>
+        <td class="col-status"><span class="badge badge-partial">~ Partial</span></td>
+        <td class="col-notes">The per-file report mode (<code>--per-file</code>) groups findings by source file. No dedicated non-compliant file index output.</td>
+      </tr>
+      <tr>
+        <td class="col-format">Findings by category per file</td>
+        <td class="col-status"><span class="badge badge-yes">✓ Supported</span></td>
+        <td class="col-notes"><code>ScanSummary.by_category</code> and per-file report mode provide this breakdown.</td>
+      </tr>
+      <tr>
+        <td class="col-format">Aggregate risk score per file</td>
+        <td class="col-status"><span class="badge badge-no">✗ Not Supported</span></td>
+        <td class="col-notes">Risk scoring not implemented — see FR-CLS-002.</td>
+      </tr>
+      <tr>
+        <td class="col-format">Recommended action (redact / quarantine / review / delete)</td>
+        <td class="col-status"><span class="badge badge-no">✗ Not Supported</span></td>
+        <td class="col-notes">No file-level action recommendation. Per-finding fix steps exist but are not rolled up to a file-level disposition.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ─── FR-RPT-004 ───────────────────────────────────────────────────────── -->
+<div class="section-card">
+  <div class="section-header">
+    <span class="fr-id">FR-RPT-004</span>
+    <h2>Output Formats</h2>
+  </div>
+  <table>
+    <thead><tr><th class="col-format">Format</th><th class="col-status">Status</th><th class="col-notes">Notes</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="col-format">HTML</td>
+        <td class="col-status"><span class="badge badge-yes">✓ Supported</span></td>
+        <td class="col-notes">Full HTML report via Jinja2 template. Use <code>--format html</code>.</td>
+      </tr>
+      <tr>
+        <td class="col-format">JSON</td>
+        <td class="col-status"><span class="badge badge-yes">✓ Supported</span></td>
+        <td class="col-notes">Machine-readable JSON output. Schema follows the <code>Report</code> / <code>Finding</code> Pydantic models. Use <code>--format json</code>.</td>
+      </tr>
+      <tr>
+        <td class="col-format">Markdown</td>
+        <td class="col-status"><span class="badge badge-yes">✓ Supported</span></td>
+        <td class="col-notes">Markdown report via Jinja2 template. Use <code>--format markdown</code>.</td>
+      </tr>
+      <tr>
+        <td class="col-format">PDF (signed, tamper-evident)</td>
+        <td class="col-status"><span class="badge badge-no">✗ Not Supported</span></td>
+        <td class="col-notes">No PDF renderer. Would require <code>weasyprint</code> or <code>reportlab</code>. Digital signing not implemented.</td>
+      </tr>
+      <tr>
+        <td class="col-format">CSV</td>
+        <td class="col-status"><span class="badge badge-no">✗ Not Supported</span></td>
+        <td class="col-notes">No CSV report format. Findings could be exported from JSON as a workaround.</td>
+      </tr>
+      <tr>
+        <td class="col-format">SARIF (CI/CD integration)</td>
+        <td class="col-status"><span class="badge badge-no">✗ Not Supported</span></td>
+        <td class="col-notes">No SARIF output. SARIF 2.1.0 is a common requirement for GitHub Advanced Security and Azure DevOps integration.</td>
+      </tr>
+      <tr>
+        <td class="col-format">XLSX</td>
+        <td class="col-status"><span class="badge badge-no">✗ Not Supported</span></td>
+        <td class="col-notes">No Excel output format. Requires <code>openpyxl</code>.</td>
+      </tr>
+      <tr>
+        <td class="col-format">Published open schema</td>
+        <td class="col-status"><span class="badge badge-partial">~ Partial</span></td>
+        <td class="col-notes">JSON schema is implicitly defined by the Pydantic models but no formal published schema (JSON Schema / OpenAPI) is distributed with the project.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ─── FR-RPT-005 ───────────────────────────────────────────────────────── -->
+<div class="section-card">
+  <div class="section-header">
+    <span class="fr-id">FR-RPT-005</span>
+    <h2>Audit Trail</h2>
+  </div>
+  <table>
+    <thead><tr><th class="col-format">Element</th><th class="col-status">Status</th><th class="col-notes">Notes</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="col-format">Immutable audit trail of scan activities</td>
+        <td class="col-status"><span class="badge badge-no">✗ Not Supported</span></td>
+        <td class="col-notes">No audit log. Scan results are written to report files only; no append-only event log is maintained.</td>
+      </tr>
+      <tr>
+        <td class="col-format">Operator identity logging</td>
+        <td class="col-status"><span class="badge badge-no">✗ Not Supported</span></td>
+        <td class="col-notes">No authentication or user identity capture.</td>
+      </tr>
+      <tr>
+        <td class="col-format">Timestamp of scan</td>
+        <td class="col-status"><span class="badge badge-yes">✓ Supported</span></td>
+        <td class="col-notes"><code>Report.scanned_at</code> records the scan timestamp and is included in all report formats.</td>
+      </tr>
+      <tr>
+        <td class="col-format">Scan configuration logged</td>
+        <td class="col-status"><span class="badge badge-partial">~ Partial</span></td>
+        <td class="col-notes"><code>Report</code> records <code>project_name</code>, <code>target_path</code>, <code>scanners_run</code>, and <code>tier_used</code>. Full <code>ScanConfig</code> (excludes, suppressions, flags) is not persisted in the report output.</td>
+      </tr>
+      <tr>
+        <td class="col-format">Findings count logged</td>
+        <td class="col-status"><span class="badge badge-yes">✓ Supported</span></td>
+        <td class="col-notes"><code>ScanSummary.total</code> and per-severity counts recorded in every report.</td>
+      </tr>
+      <tr>
+        <td class="col-format">Remediation actions logged</td>
+        <td class="col-status"><span class="badge badge-partial">~ Partial</span></td>
+        <td class="col-notes">The <code>obfuscate</code> command performs in-place source-file replacements (with file backups and a <code>rollback</code> command to undo). Each obfuscation session is persisted as a JSON file recording per-finding decisions (<code>approved</code> / <code>skipped</code> / <code>manual</code>), the replacement token applied, skip reason, and an <code>applied_at</code> UTC timestamp. Operator identity is not captured, and the session log is separate from the main scan report — it is not embedded in HTML/Markdown/JSON report output.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ─── NFR-P-001–006 ─────────────────────────────────────────────────────── -->
+<div class="section-card">
+  <div class="section-header">
+    <span class="fr-id">NFR-P-001–006</span>
+    <h2>Performance Non-Functional Requirements</h2>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th style="width:8%">ID</th>
+        <th class="col-format" style="width:26%">Requirement</th>
+        <th style="width:12%">Target</th>
+        <th class="col-status" style="width:14%">Status</th>
+        <th class="col-notes">Notes</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td style="font-weight:600;white-space:nowrap">NFR-P-001</td>
+        <td class="col-format">Structured file throughput</td>
+        <td>≥ 1 GB/min (4-core, 16 GB RAM)</td>
+        <td class="col-status"><span class="badge badge-partial">~ Partial</span></td>
+        <td class="col-notes">With the regex-only layer active, throughput on plain-text and code files is likely to approach this target — file I/O is async (<code>aiofiles</code>) and patterns are pre-compiled. When the NER layer is active (Presidio + spaCy <code>en_core_web_sm</code>), every chunk passes through an in-process neural model, reducing throughput materially below 1 GB/min. No formal benchmark has been run against a 4-core 16 GB node.</td>
+      </tr>
+      <tr>
+        <td style="font-weight:600;white-space:nowrap">NFR-P-002</td>
+        <td class="col-format">Unstructured document throughput</td>
+        <td>≥ 500 pages/min (text-based PDF)</td>
+        <td class="col-status"><span class="badge badge-no">✗ Not Met</span></td>
+        <td class="col-notes">PDF extraction uses <code>pdfminer.six</code>, which is synchronous and single-threaded. Typical throughput is 1–8 pages/sec (60–480 pages/min) depending on page complexity — unreliably below the 500 pages/min target. Scanned (image-only) PDFs are not supported at all (see FR-ING-005 and NFR-P-003). Would require a faster backend (e.g. <code>pymupdf</code>) and extraction in a <code>ProcessPoolExecutor</code>.</td>
+      </tr>
+      <tr>
+        <td style="font-weight:600;white-space:nowrap">NFR-P-003</td>
+        <td class="col-format">Image OCR throughput</td>
+        <td>≥ 60 images/min at 300 DPI</td>
+        <td class="col-status"><span class="badge badge-no">✗ Not Supported</span></td>
+        <td class="col-notes">No OCR capability exists. <code>pytesseract</code>, <code>easyocr</code>, <code>Pillow</code>, and Tesseract are absent from the dependency tree. Image formats (<code>.png</code>, <code>.jpg</code>, <code>.tiff</code>, etc.) are silently skipped during traversal. NFR cannot be assessed against a throughput target as the capability does not exist — see FR-ING-005.</td>
+      </tr>
+      <tr>
+        <td style="font-weight:600;white-space:nowrap">NFR-P-004</td>
+        <td class="col-format">Database scan rate</td>
+        <td>≥ 100,000 rows/min per connection</td>
+        <td class="col-status"><span class="badge badge-no">✗ Not Supported</span></td>
+        <td class="col-notes">No live database connectivity (see FR-ING-007). The <code>db_conn_string</code> rule detects credentials embedded in source code — it is not a database content scanner. Flat-file exports (CSV, Parquet, ORC, Avro) are supported but no row-throughput benchmark exists and the 100,000 rows/min target has not been validated. Requires a dedicated connector with connection pooling and batched reads.</td>
+      </tr>
+      <tr>
+        <td style="font-weight:600;white-space:nowrap">NFR-P-005</td>
+        <td class="col-format">Report generation time</td>
+        <td>Executive report within 60 seconds of scan completion</td>
+        <td class="col-status"><span class="badge badge-yes">✓ Met</span></td>
+        <td class="col-notes">Report generation is entirely in-memory. The Jinja2 <code>Environment</code> is cached at module level (no recompilation) and the <code>RegulationEngine</code> is lazy-initialised and cached. All four output formats (HTML, Markdown, JSON, console) complete in well under 5 seconds in practice, even for scans with thousands of findings.</td>
+      </tr>
+      <tr>
+        <td style="font-weight:600;white-space:nowrap">NFR-P-006</td>
+        <td class="col-format">Horizontal scalability</td>
+        <td>Linear scaling to 64 parallel worker nodes</td>
+        <td class="col-status"><span class="badge badge-no">✗ Not Met</span></td>
+        <td class="col-notes">The tool is a single-node, single-process application. Concurrency is provided by <code>asyncio</code> and by running scanner subprocesses in parallel — good utilisation of one multi-core machine, but not distributed across hosts. No work queue, coordinator/worker topology, or shared state store exists. Would require a task-queue layer (e.g. Celery + Redis, or Ray) partitioning the file tree across workers, with a central coordinator merging and deduplicating results.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<footer>
+  PII-Screener &nbsp;|&nbsp; Support matrix updated 2026-06-15 &nbsp;|&nbsp; For implementation queries raise an issue or consult docs/scanners.md
+</footer>
+
+</body>
+</html>

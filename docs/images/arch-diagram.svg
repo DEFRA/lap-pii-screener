@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="800" height="660" viewBox="0 0 800 660"
+     xmlns="http://www.w3.org/2000/svg"
+     font-family="'Segoe UI', Arial, sans-serif">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 7" markerWidth="10" markerHeight="7"
+            refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0 10 3.5 0 7" fill="#64748B"/>
+    </marker>
+    <marker id="arr-lite" viewBox="0 0 10 7" markerWidth="10" markerHeight="7"
+            refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0 10 3.5 0 7" fill="#94A3B8"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="800" height="660" fill="#F8FAFC"/>
+
+  <!-- ═══════════════════════════════════════════════════ Title -->
+  <text x="400" y="26" text-anchor="middle" font-size="17" font-weight="700" fill="#0F172A">PII Screener — Component Architecture</text>
+
+  <!-- ═══════════════════════════════════════════════ Entry Points -->
+  <rect x="25" y="40" width="750" height="82" rx="8" fill="#DBEAFE" stroke="#2563EB" stroke-width="1.5"/>
+  <text x="400" y="57" text-anchor="middle" font-size="9.5" font-weight="700" letter-spacing="1.5" fill="#1E40AF">ENTRY POINTS</text>
+  <!-- CLI inner box -->
+  <rect x="45" y="63" width="335" height="50" rx="6" fill="#2563EB"/>
+  <text x="212" y="82" text-anchor="middle" font-size="11" font-weight="700" fill="white">CLI  (cli.py)</text>
+  <text x="212" y="100" text-anchor="middle" font-size="9" fill="#BFDBFE">sensitive-scanner scan · status · obfuscate · rollback</text>
+  <!-- MCP inner box -->
+  <rect x="420" y="63" width="335" height="50" rx="6" fill="#1D4ED8"/>
+  <text x="587" y="82" text-anchor="middle" font-size="11" font-weight="700" fill="white">MCP Server  (server.py)</text>
+  <text x="587" y="100" text-anchor="middle" font-size="9" fill="#BFDBFE">scan_codebase · get_report · list_findings · get_remediation</text>
+
+  <!-- Arrow: Entry Points → Orchestrator -->
+  <line x1="400" y1="122" x2="400" y2="154" stroke="#64748B" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- ══════════════════════════════════════════ Scan Orchestrator -->
+  <rect x="25" y="154" width="750" height="90" rx="8" fill="#DCFCE7" stroke="#16A34A" stroke-width="1.5"/>
+  <text x="400" y="172" text-anchor="middle" font-size="9.5" font-weight="700" letter-spacing="1.5" fill="#14532D">SCAN ORCHESTRATOR — scanners/orchestrator.py</text>
+  <text x="90"  y="190" font-size="9.5" fill="#166534">• Detect available scanner backends (Tier 1 / 2 / 3)</text>
+  <text x="430" y="190" font-size="9.5" fill="#166534">• Merge and deduplicate findings</text>
+  <text x="90"  y="207" font-size="9.5" fill="#166534">• Launch all scanners concurrently via asyncio</text>
+  <text x="430" y="207" font-size="9.5" fill="#166534">• Apply inline suppressions (# noscan comments)</text>
+  <text x="90"  y="224" font-size="9.5" fill="#166534">• Apply per-scanner suppression rule lists</text>
+  <text x="430" y="224" font-size="9.5" fill="#166534">• Assemble and cache Report object in memory</text>
+
+  <!-- Fan arrows: Orchestrator → each Scanner -->
+  <line x1="111" y1="244" x2="111" y2="270" stroke="#64748B" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="297" y1="244" x2="297" y2="270" stroke="#64748B" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="497" y1="244" x2="497" y2="270" stroke="#64748B" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="693" y1="244" x2="693" y2="270" stroke="#94A3B8" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#arr-lite)"/>
+
+  <!-- ═════════════════════════════════════════ Scanner Backends -->
+
+  <!-- Gitleaks: x=25, w=172, cx=111 -->
+  <rect x="25" y="270" width="172" height="82" rx="6" fill="#FEF3C7" stroke="#D97706" stroke-width="1.5"/>
+  <text x="111" y="292" text-anchor="middle" font-size="11" font-weight="700" fill="#92400E">Gitleaks</text>
+  <text x="111" y="308" text-anchor="middle" font-size="9"   fill="#78350F">gitleaks_scanner.py</text>
+  <text x="111" y="322" text-anchor="middle" font-size="9"   fill="#78350F">150+ secret patterns</text>
+  <text x="111" y="336" text-anchor="middle" font-size="9"   fill="#78350F">Managed binary · subprocess</text>
+  <text x="111" y="347" text-anchor="middle" font-size="8"   fill="#B45309">Tier 1</text>
+
+  <!-- Semgrep: x=211, w=172, cx=297 -->
+  <rect x="211" y="270" width="172" height="82" rx="6" fill="#FEF3C7" stroke="#D97706" stroke-width="1.5"/>
+  <text x="297" y="292" text-anchor="middle" font-size="11" font-weight="700" fill="#92400E">Semgrep</text>
+  <text x="297" y="308" text-anchor="middle" font-size="9"   fill="#78350F">semgrep_scanner.py</text>
+  <text x="297" y="322" text-anchor="middle" font-size="9"   fill="#78350F">Code-structure analysis</text>
+  <text x="297" y="336" text-anchor="middle" font-size="9"   fill="#78350F">OWASP Top 10 rules</text>
+  <text x="297" y="347" text-anchor="middle" font-size="8"   fill="#B45309">Tier 1</text>
+
+  <!-- PII Scanner: x=397, w=200, cx=497 -->
+  <rect x="397" y="270" width="200" height="82" rx="6" fill="#FCE7F3" stroke="#DB2777" stroke-width="1.5"/>
+  <text x="497" y="292" text-anchor="middle" font-size="11" font-weight="700" fill="#9D174D">PII Scanner</text>
+  <text x="497" y="308" text-anchor="middle" font-size="9"   fill="#831843">pii_scanner.py</text>
+  <text x="497" y="322" text-anchor="middle" font-size="9"   fill="#831843">Regex + NER + Binary docs</text>
+  <text x="497" y="336" text-anchor="middle" font-size="9"   fill="#831843">Pure Python, in-process</text>
+  <text x="497" y="347" text-anchor="middle" font-size="8"   fill="#BE185D">Tier 1</text>
+
+  <!-- SonarQube: x=611, w=164, cx=693  (optional — dashed) -->
+  <rect x="611" y="270" width="164" height="82" rx="6" fill="#F1F5F9" stroke="#94A3B8" stroke-width="1.5" stroke-dasharray="6,3"/>
+  <text x="693" y="292" text-anchor="middle" font-size="11" font-weight="700" fill="#475569">SonarQube</text>
+  <text x="693" y="308" text-anchor="middle" font-size="9"   fill="#64748B">sonarqube_scanner.py</text>
+  <text x="693" y="322" text-anchor="middle" font-size="9"   fill="#64748B">Taint + data-flow analysis</text>
+  <text x="693" y="336" text-anchor="middle" font-size="9"   fill="#64748B">JVM / Docker container</text>
+  <text x="693" y="347" text-anchor="middle" font-size="8"   fill="#94A3B8">Tier 2 / 3</text>
+
+  <!-- Merge lines: scanner bottoms → horizontal join → Remediation -->
+  <line x1="111" y1="352" x2="111" y2="368" stroke="#64748B" stroke-width="1.5"/>
+  <line x1="297" y1="352" x2="297" y2="368" stroke="#64748B" stroke-width="1.5"/>
+  <line x1="497" y1="352" x2="497" y2="368" stroke="#64748B" stroke-width="1.5"/>
+  <line x1="693" y1="352" x2="693" y2="368" stroke="#94A3B8" stroke-width="1.5" stroke-dasharray="5,3"/>
+  <!-- Horizontal: solid 111→497, dashed 497→693 -->
+  <line x1="111" y1="368" x2="497" y2="368" stroke="#64748B" stroke-width="1.5"/>
+  <line x1="497" y1="368" x2="693" y2="368" stroke="#94A3B8" stroke-width="1.5" stroke-dasharray="5,3"/>
+  <!-- Arrow down from midpoint -->
+  <line x1="400" y1="368" x2="400" y2="390" stroke="#64748B" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- ═══════════════════════════════ Remediation + Regulation Engines -->
+  <rect x="125" y="390" width="550" height="68" rx="8" fill="#F3E8FF" stroke="#7C3AED" stroke-width="1.5"/>
+  <text x="400" y="410" text-anchor="middle" font-size="9.5" font-weight="700" letter-spacing="1.5" fill="#4C1D95">REMEDIATION + REGULATION ENGINES</text>
+  <text x="400" y="428" text-anchor="middle" font-size="9.5" fill="#5B21B6">remediation/engine.py  ·  remediation/regulation_engine.py</text>
+  <text x="400" y="446" text-anchor="middle" font-size="9"   fill="#6D28D9">rule_id → category · severity · fix_steps · CWE / OWASP · UK GDPR / PCI DSS / PSR 2017</text>
+
+  <!-- Arrow: Remediation → Models -->
+  <line x1="400" y1="458" x2="400" y2="480" stroke="#64748B" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- ═══════════════════════════════════ Report / Finding Models -->
+  <rect x="195" y="480" width="410" height="56" rx="8" fill="#EFF6FF" stroke="#3B82F6" stroke-width="1.5"/>
+  <text x="400" y="500" text-anchor="middle" font-size="9.5" font-weight="700" letter-spacing="1.5" fill="#1E3A8A">REPORT / FINDING MODELS</text>
+  <text x="400" y="517" text-anchor="middle" font-size="9.5" fill="#1D4ED8">models/finding.py  ·  models/report.py</text>
+  <text x="400" y="530" text-anchor="middle" font-size="9"   fill="#2563EB">ScanConfig · Finding · Report · ScanSummary</text>
+
+  <!-- Fan: Models → Reporters -->
+  <line x1="400" y1="536" x2="400" y2="548" stroke="#64748B" stroke-width="1.5"/>
+  <line x1="147" y1="548" x2="653" y2="548" stroke="#64748B" stroke-width="1.5"/>
+  <line x1="147" y1="548" x2="147" y2="562" stroke="#64748B" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="400" y1="548" x2="400" y2="562" stroke="#64748B" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="653" y1="548" x2="653" y2="562" stroke="#64748B" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- ═══════════════════════════════════════════════════ Reporters -->
+
+  <!-- Console: x=25, w=243, cx=147 -->
+  <rect x="25" y="562" width="243" height="60" rx="6" fill="#F0FDF4" stroke="#16A34A" stroke-width="1.5"/>
+  <text x="147" y="583" text-anchor="middle" font-size="11" font-weight="700" fill="#14532D">Console Reporter</text>
+  <text x="147" y="599" text-anchor="middle" font-size="9"   fill="#166534">reporting/console.py</text>
+  <text x="147" y="614" text-anchor="middle" font-size="9"   fill="#166534">Rich-formatted terminal output</text>
+
+  <!-- Markdown: x=278, w=243, cx=400 -->
+  <rect x="278" y="562" width="243" height="60" rx="6" fill="#F0FDF4" stroke="#16A34A" stroke-width="1.5"/>
+  <text x="400" y="583" text-anchor="middle" font-size="11" font-weight="700" fill="#14532D">Markdown Reporter</text>
+  <text x="400" y="599" text-anchor="middle" font-size="9"   fill="#166534">reporting/markdown_reporter.py</text>
+  <text x="400" y="614" text-anchor="middle" font-size="9"   fill="#166534">Jinja2 template → .md file</text>
+
+  <!-- HTML/JSON: x=531, w=244, cx=653 -->
+  <rect x="531" y="562" width="244" height="60" rx="6" fill="#F0FDF4" stroke="#16A34A" stroke-width="1.5"/>
+  <text x="653" y="583" text-anchor="middle" font-size="11" font-weight="700" fill="#14532D">HTML / JSON Reporters</text>
+  <text x="653" y="599" text-anchor="middle" font-size="9"   fill="#166534">html_reporter.py · json_reporter.py</text>
+  <text x="653" y="614" text-anchor="middle" font-size="9"   fill="#166534">Jinja2 template · machine-readable</text>
+
+  <!-- ═══════════════════════════════════════════════════ Legend -->
+  <line x1="25" y1="638" x2="775" y2="638" stroke="#E2E8F0" stroke-width="1"/>
+  <line x1="30" y1="650" x2="65" y2="650" stroke="#64748B" stroke-width="1.5"/>
+  <text x="70"  y="654" font-size="9" fill="#64748B">Solid: primary data flow</text>
+  <line x1="220" y1="650" x2="255" y2="650" stroke="#94A3B8" stroke-width="1.5" stroke-dasharray="5,3"/>
+  <text x="260" y="654" font-size="9" fill="#94A3B8">Dashed: optional / Tier 2+ (SonarQube)</text>
+
+</svg>

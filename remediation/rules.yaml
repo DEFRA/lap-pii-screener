@@ -1,0 +1,439 @@
+# Remediation rules keyed by internal category name.
+# Each entry provides severity, a description, step-by-step fix instructions,
+# and links to relevant standards (CWE, OWASP, GDPR, etc.).
+
+categories:
+
+  # ── API Keys ──────────────────────────────────────────────────────────────
+
+  api_key_aws_access:
+    severity: critical
+    description: "AWS Access Key ID detected in source code."
+    fix_steps:
+      - "Immediately rotate the compromised key: AWS Console → IAM → Users → Security credentials → Deactivate key."
+      - "Audit CloudTrail for any unauthorised API calls made with this key."
+      - "Remove the key from all source files. Use git-filter-repo to purge from git history."
+      - "Replace with IAM Roles (EC2/Lambda) or store in AWS Secrets Manager / Parameter Store."
+      - "Enable AWS Config rule 'access-keys-rotated' to prevent recurrence."
+    references:
+      - "CWE-798: Use of Hard-coded Credentials"
+      - "OWASP A07:2021 - Identification and Authentication Failures"
+      - "https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html"
+
+  api_key_aws_secret:
+    severity: critical
+    description: "AWS Secret Access Key detected in source code."
+    fix_steps:
+      - "Immediately rotate the key pair in AWS IAM Console."
+      - "Audit CloudTrail for unauthorised usage since the key was exposed."
+      - "Remove from source and git history using git-filter-repo."
+      - "Use IAM roles or AWS Secrets Manager for runtime credential supply."
+    references:
+      - "CWE-798: Use of Hard-coded Credentials"
+      - "OWASP A07:2021 - Identification and Authentication Failures"
+      - "https://docs.aws.amazon.com/secretsmanager/latest/userguide/intro.html"
+
+  api_key_gcp:
+    severity: critical
+    description: "Google Cloud API key detected in source code."
+    fix_steps:
+      - "Revoke the key: Google Cloud Console → APIs & Services → Credentials → Delete key."
+      - "Review Google Cloud Audit Logs for unauthorised usage."
+      - "Replace with a service account with least-privilege IAM roles."
+      - "Use Secret Manager (GCP) or Workload Identity Federation instead."
+    references:
+      - "CWE-798: Use of Hard-coded Credentials"
+      - "https://cloud.google.com/docs/authentication/api-keys"
+
+  api_key_azure:
+    severity: critical
+    description: "Azure API key or subscription key detected in source code."
+    fix_steps:
+      - "Regenerate the key in Azure Portal → relevant service → Keys & Endpoints."
+      - "Review Azure Monitor / Activity Log for unauthorised calls."
+      - "Use Azure Managed Identity or Key Vault references instead of embedding keys."
+    references:
+      - "CWE-798: Use of Hard-coded Credentials"
+      - "https://learn.microsoft.com/en-us/azure/key-vault/general/overview"
+
+  api_key_github:
+    severity: critical
+    description: "GitHub Personal Access Token (classic or fine-grained) detected."
+    fix_steps:
+      - "Revoke the token immediately: GitHub → Settings → Developer settings → Personal access tokens."
+      - "Check the token's audit log for any unauthorised repository access or modifications."
+      - "Use GitHub Actions secrets or a secrets manager for CI/CD workflows."
+      - "Consider switching to GitHub App installation tokens (short-lived)."
+    references:
+      - "CWE-798: Use of Hard-coded Credentials"
+      - "https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens"
+
+  api_key_gitlab:
+    severity: critical
+    description: "GitLab Personal Access Token detected in source code."
+    fix_steps:
+      - "Revoke the token: GitLab → User settings → Access Tokens → Revoke."
+      - "Use GitLab CI/CD variables (masked + protected) for pipeline secrets."
+    references:
+      - "CWE-798: Use of Hard-coded Credentials"
+      - "https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html"
+
+  api_key_stripe:
+    severity: critical
+    description: "Stripe API key (live or test) detected in source code."
+    fix_steps:
+      - "Roll the key immediately in the Stripe Dashboard → Developers → API keys."
+      - "Check Stripe's event log for unauthorised charges or data access."
+      - "Store keys in environment variables or a secrets manager; never commit them."
+    references:
+      - "CWE-798: Use of Hard-coded Credentials"
+      - "https://stripe.com/docs/keys"
+
+  api_key_slack:
+    severity: high
+    description: "Slack bot token or webhook URL with embedded credentials detected."
+    fix_steps:
+      - "Revoke/regenerate the token or webhook in Slack API App settings."
+      - "Use Slack's Socket Mode and store tokens in environment variables."
+    references:
+      - "CWE-798: Use of Hard-coded Credentials"
+      - "https://api.slack.com/authentication/token-types"
+
+  api_key_twilio:
+    severity: high
+    description: "Twilio API key or Auth Token detected in source code."
+    fix_steps:
+      - "Rotate credentials in Twilio Console → Account → API Keys & Tokens."
+      - "Use environment variables or a secrets manager to supply credentials at runtime."
+    references:
+      - "CWE-798: Use of Hard-coded Credentials"
+      - "https://www.twilio.com/docs/iam/api-keys"
+
+  api_key_sendgrid:
+    severity: high
+    description: "SendGrid API key detected in source code."
+    fix_steps:
+      - "Delete and regenerate the API key in the SendGrid dashboard."
+      - "Apply least-privilege: create dedicated keys per service with minimal scopes."
+    references:
+      - "CWE-798: Use of Hard-coded Credentials"
+
+  api_key_openai:
+    severity: high
+    description: "OpenAI API key detected in source code."
+    fix_steps:
+      - "Rotate the key immediately at platform.openai.com → API keys."
+      - "Review usage logs for unexpected consumption or data exposure."
+      - "Store in environment variables; never commit to version control."
+    references:
+      - "CWE-798: Use of Hard-coded Credentials"
+      - "https://platform.openai.com/docs/api-reference/authentication"
+
+  api_key_generic:
+    severity: high
+    description: "Generic API key pattern detected in source code."
+    fix_steps:
+      - "Identify the service this key belongs to and rotate it immediately."
+      - "Remove from source code and git history."
+      - "Store in an environment variable, .env file (excluded from VCS), or a secrets manager."
+    references:
+      - "CWE-798: Use of Hard-coded Credentials"
+      - "OWASP A07:2021 - Identification and Authentication Failures"
+
+  # ── Authentication / Secrets ──────────────────────────────────────────────
+
+  hardcoded_password:
+    severity: critical
+    description: "Hardcoded password found in source code."
+    fix_steps:
+      - "Change the password on the target system immediately."
+      - "Remove the password from source code and git history (git-filter-repo)."
+      - "Inject credentials at runtime via environment variables or a secrets manager."
+      - "Enforce a policy scan in CI/CD to block future commits with secrets (e.g. pre-commit + gitleaks)."
+    references:
+      - "CWE-259: Use of Hard-coded Password"
+      - "OWASP A07:2021 - Identification and Authentication Failures"
+
+  jwt_token:
+    severity: high
+    description: "A JSON Web Token (JWT) value found in source code."
+    fix_steps:
+      - "If this is a production token, invalidate it by rotating the signing secret."
+      - "Never hardcode tokens; generate them at runtime and store signing keys in a secrets manager."
+      - "Ensure JWTs have short expiry times and use the 'exp' claim."
+    references:
+      - "CWE-798: Use of Hard-coded Credentials"
+      - "https://jwt.io/introduction"
+
+  oauth_secret:
+    severity: critical
+    description: "OAuth client secret detected in source code."
+    fix_steps:
+      - "Regenerate the client secret in the OAuth provider's developer console."
+      - "Store OAuth secrets in environment variables or a vault; never in source code."
+    references:
+      - "CWE-798: Use of Hard-coded Credentials"
+      - "OWASP A07:2021 - Identification and Authentication Failures"
+
+  private_key_rsa:
+    severity: critical
+    description: "RSA/EC/DSA private key (PEM format) found in source code."
+    fix_steps:
+      - "Treat this key as compromised. Revoke any certificates issued against it."
+      - "Generate a new key pair and update all systems that use it."
+      - "Remove from source and git history immediately."
+      - "Store private keys only in secure vaults (HashiCorp Vault, AWS KMS, Azure Key Vault)."
+    references:
+      - "CWE-321: Use of Hard-coded Cryptographic Key"
+      - "OWASP A02:2021 - Cryptographic Failures"
+
+  private_key_generic:
+    severity: critical
+    description: "Private key material detected in source code."
+    fix_steps:
+      - "Revoke and regenerate the key immediately."
+      - "Remove from source and git history."
+      - "Use a dedicated key management service (KMS) for storing cryptographic material."
+    references:
+      - "CWE-321: Use of Hard-coded Cryptographic Key"
+      - "OWASP A02:2021 - Cryptographic Failures"
+
+  encryption_key:
+    severity: critical
+    description: "Symmetric encryption key or IV detected in source code."
+    fix_steps:
+      - "Rotate the key and re-encrypt any data protected by it."
+      - "Use a KMS (AWS KMS, GCP Cloud KMS, Azure Key Vault) to manage encryption keys."
+      - "Never embed encryption keys in source code."
+    references:
+      - "CWE-321: Use of Hard-coded Cryptographic Key"
+      - "OWASP A02:2021 - Cryptographic Failures"
+
+  # ── Database / Infrastructure ─────────────────────────────────────────────
+
+  db_connection_string:
+    severity: critical
+    description: "Database connection string with embedded credentials detected."
+    fix_steps:
+      - "Rotate the database credentials immediately."
+      - "Replace the connection string with a reference to an environment variable or secrets manager entry."
+      - "Use connection poolers (PgBouncer, RDS Proxy) with IAM auth where supported."
+      - "Remove from git history."
+    references:
+      - "CWE-312: Cleartext Storage of Sensitive Information"
+      - "CWE-798: Use of Hard-coded Credentials"
+
+  db_password:
+    severity: critical
+    description: "Hardcoded database password detected."
+    fix_steps:
+      - "Change the database password immediately."
+      - "Use environment variables (DATABASE_PASSWORD) or a secrets manager."
+      - "Prefer IAM database authentication (RDS, Cloud SQL) where available."
+    references:
+      - "CWE-259: Use of Hard-coded Password"
+      - "CWE-312: Cleartext Storage of Sensitive Information"
+
+  webhook_url_secret:
+    severity: high
+    description: "Webhook URL with embedded authentication token or secret detected."
+    fix_steps:
+      - "Regenerate the webhook token or secret on the receiving service."
+      - "Store webhook URLs in environment variables, not source code."
+    references:
+      - "CWE-798: Use of Hard-coded Credentials"
+
+  # ── PII — Structured ──────────────────────────────────────────────────────
+
+  pii_email:
+    severity: medium
+    description: "Email address found in source code."
+    fix_steps:
+      - "Determine if this is production user data or a test/placeholder address."
+      - "If production data: remove immediately and assess GDPR/CCPA breach notification obligations."
+      - "Use anonymised, synthetic test data in non-production environments."
+      - "If a system email (e.g. no-reply@company.com), move to a configuration file excluded from VCS."
+    references:
+      - "GDPR Article 4(1) - Personal Data Definition"
+      - "GDPR Article 5(1)(f) - Integrity and Confidentiality"
+      - "CWE-312: Cleartext Storage of Sensitive Information"
+
+  pii_phone:
+    severity: medium
+    description: "Phone number detected in source code."
+    fix_steps:
+      - "If this is real user data, remove it and evaluate GDPR/CCPA notification requirements."
+      - "Replace with anonymised test data (e.g. +1-555-000-0001)."
+      - "Ensure production PII is never checked into version control."
+    references:
+      - "GDPR Article 4(1) - Personal Data Definition"
+      - "CCPA Section 1798.140"
+      - "CWE-312: Cleartext Storage of Sensitive Information"
+
+  pii_ssn:
+    severity: critical
+    description: "US Social Security Number (SSN) pattern detected in source code."
+    fix_steps:
+      - "This is highly sensitive PII. Remove immediately and assess legal breach notification obligations."
+      - "Check if this data has been in any release/commit visible to others."
+      - "Replace all test data with synthetic SSNs (000-00-0001 to 000-00-0009 are always invalid)."
+      - "Encrypt SSNs at rest using AES-256; never store in plaintext."
+    references:
+      - "CWE-312: Cleartext Storage of Sensitive Information"
+      - "GDPR Article 9 - Special Category Data"
+      - "US Social Security Act § 208"
+
+  pii_credit_card:
+    severity: critical
+    description: "Credit card number (Luhn-validated) detected in source code."
+    fix_steps:
+      - "This is PCI DSS in-scope data. Immediate removal required."
+      - "Notify your PCI DSS Qualified Security Assessor (QSA)."
+      - "Purge from git history and any logs/backups."
+      - "Use tokenisation (Stripe, Braintree) so card numbers never touch your codebase."
+    references:
+      - "PCI DSS Requirement 3.3 - Sensitive Authentication Data"
+      - "CWE-312: Cleartext Storage of Sensitive Information"
+      - "GDPR Article 9 - Special Category Data"
+
+  pii_passport:
+    severity: high
+    description: "Passport number pattern detected in source code."
+    fix_steps:
+      - "Remove and evaluate GDPR/CCPA notification obligations if real data."
+      - "Passport numbers are government-issued IDs — treat as sensitive special-category PII."
+      - "Encrypt at rest; restrict access on a need-to-know basis."
+    references:
+      - "GDPR Article 9 - Special Category Data"
+      - "CWE-312: Cleartext Storage of Sensitive Information"
+
+  pii_drivers_license:
+    severity: high
+    description: "Driver's licence number pattern detected in source code."
+    fix_steps:
+      - "Remove and assess breach notification requirements."
+      - "Replace with synthetic test data."
+      - "Store government IDs encrypted; never in plaintext source code."
+    references:
+      - "GDPR Article 9 - Special Category Data"
+      - "CWE-312: Cleartext Storage of Sensitive Information"
+
+  pii_iban_bank:
+    severity: high
+    description: "IBAN or bank account number detected in source code."
+    fix_steps:
+      - "Remove immediately — bank account details are payment data subject to PCI DSS and GDPR."
+      - "Use payment tokenisation services; never store raw account numbers."
+    references:
+      - "PCI DSS Requirement 3"
+      - "GDPR Article 5 - Principles"
+      - "CWE-312: Cleartext Storage of Sensitive Information"
+
+  pii_date_of_birth:
+    severity: medium
+    description: "Date of birth pattern detected, potentially linked to a real person."
+    fix_steps:
+      - "Determine if this is real user data or synthetic test data."
+      - "If real: remove, anonymise, and assess GDPR obligations."
+      - "Use age ranges or synthetic DOBs in test data."
+    references:
+      - "GDPR Article 4(1) - Personal Data Definition"
+      - "CWE-312: Cleartext Storage of Sensitive Information"
+
+  pii_ip_address:
+    severity: low
+    description: "IP address found in source code string — may identify an individual under GDPR."
+    fix_steps:
+      - "Assess whether this IP relates to a real individual (GDPR Article 4 defines IP addresses as personal data)."
+      - "Replace hardcoded IPs with configuration values or use placeholder addresses (192.0.2.0/24 TEST-NET)."
+    references:
+      - "GDPR Article 4(1) - Personal Data Definition"
+      - "GDPR Recital 30 - Online Identifiers"
+
+  pii_uk_postcode:
+    severity: medium
+    description: "UK postcode detected in source code — may identify a household under GDPR."
+    fix_steps:
+      - "Determine whether this is real user data or a placeholder (e.g. SW1A 2AA is the Houses of Parliament)."
+      - "If real: remove and assess GDPR obligations; postcodes can identify households."
+      - "Use synthetic postcodes from the Royal Mail test postcode list for non-production use."
+    references:
+      - "GDPR Article 4(1) - Personal Data Definition"
+      - "ICO Guidance on Anonymisation and Pseudonymisation"
+      - "CWE-312: Cleartext Storage of Sensitive Information"
+
+  pii_nhs_number:
+    severity: high
+    description: "NHS number (modulus-11 validated) detected — uniquely identifies a patient in the UK healthcare system."
+    fix_steps:
+      - "Remove immediately. NHS numbers are sensitive personal data under UK GDPR."
+      - "Assess whether a Section 29/30 FOIA or Data Protection Act exemption applies if used in research."
+      - "Replace with synthetic identifiers in non-production environments."
+      - "Store NHS numbers encrypted at rest; access should be audited and strictly limited."
+    references:
+      - "UK GDPR Article 4(1) - Personal Data Definition"
+      - "UK GDPR Article 9 - Special Category Data (health context)"
+      - "NHS Digital Data Security and Protection Toolkit"
+      - "CWE-312: Cleartext Storage of Sensitive Information"
+
+  pii_bank_account:
+    severity: high
+    description: "UK bank sort code or account number detected in source code."
+    fix_steps:
+      - "Remove immediately — bank account details are payment data subject to PSD2 and UK GDPR."
+      - "Use payment tokenisation; never store raw account numbers or sort codes in source."
+      - "If a legitimate system configuration value, move to an environment variable excluded from VCS."
+    references:
+      - "PCI DSS Requirement 3 - Protection of Stored Cardholder Data"
+      - "UK GDPR Article 5 - Principles Relating to Processing"
+      - "FCA Payment Services Regulations 2017"
+      - "CWE-312: Cleartext Storage of Sensitive Information"
+
+  pii_mac_address:
+    severity: low
+    description: "Device MAC address detected — may identify an individual's device under GDPR."
+    fix_steps:
+      - "Assess whether this MAC address relates to a real device in production use."
+      - "MAC addresses are personal data under GDPR Recital 30 when they can be linked to a person."
+      - "Replace hardcoded MAC addresses with configuration values or use the locally-administered range (02:xx:xx:xx:xx:xx) for testing."
+    references:
+      - "GDPR Recital 30 - Online Identifiers"
+      - "GDPR Article 4(1) - Personal Data Definition"
+      - "CWE-312: Cleartext Storage of Sensitive Information"
+
+  # ── PII — Unstructured (NLP-detected) ────────────────────────────────────
+
+  pii_person_name:
+    severity: low
+    description: "Person name detected by NLP entity recognition in a string literal or comment."
+    fix_steps:
+      - "Verify whether this is a real person's name (vs. a fictional example)."
+      - "If real: remove or replace with a synthetic name (e.g. Jane Doe, John Smith)."
+      - "Use dedicated test-data generation libraries (Faker) to produce realistic but fake PII."
+    references:
+      - "GDPR Article 4(1) - Personal Data Definition"
+      - "CWE-312: Cleartext Storage of Sensitive Information"
+
+  pii_address:
+    severity: medium
+    description: "Physical address detected by NLP entity recognition."
+    fix_steps:
+      - "If this is real user or employee data, remove and assess GDPR obligations."
+      - "Replace with synthetic addresses (e.g. 123 Test St, Anytown, UK)."
+    references:
+      - "GDPR Article 4(1) - Personal Data Definition"
+      - "CWE-312: Cleartext Storage of Sensitive Information"
+
+  # ── Generic / Catch-all ───────────────────────────────────────────────────
+
+  generic_secret:
+    severity: medium
+    description: "Generic secret or sensitive value detected."
+    fix_steps:
+      - "Identify what service or system this value authenticates to."
+      - "Rotate / revoke the value on that service immediately."
+      - "Remove from source code and git history."
+      - "Store secrets in environment variables or a dedicated secrets manager."
+    references:
+      - "CWE-798: Use of Hard-coded Credentials"
+      - "OWASP A07:2021 - Identification and Authentication Failures"

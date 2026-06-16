@@ -1,0 +1,30 @@
+# .scannerignore — exclusions for sensitive-scanner
+# ─────────────────────────────────────────────────
+# Place this file in the root of any project you want to scan.
+# Lines without wildcards are treated as directory names (matched anywhere in the path).
+# Lines containing * ? [ / are treated as glob patterns (matched against the relative file path).
+# Blank lines and lines starting with # are ignored.
+
+# ── Extra directories (plain names) ──────────────────────────────────────────
+# coverage
+# docs
+# migrations
+# test_fixtures
+
+# ── Glob patterns ─────────────────────────────────────────────────────────────
+# Minified / generated JS
+# **/*.min.js
+# **/*.bundle.js
+
+# Generated source
+# src/generated/**
+# **/auto_generated/**
+
+# Test fixtures that intentionally contain dummy PII
+# tests/fixtures/**
+# **/*.fixture.*
+
+# Lock files
+# **/package-lock.json
+# **/yarn.lock
+# **/poetry.lock

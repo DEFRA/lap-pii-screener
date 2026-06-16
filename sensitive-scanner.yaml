@@ -1,0 +1,95 @@
+# sensitive-scanner.yaml
+# ──────────────────────────────────────────────────────────────────────────────
+# Drop this file in the root of any project you want to scan.
+# Run: sensitive-scanner scan .
+#
+# CLI flags always override values set here.
+# ──────────────────────────────────────────────────────────────────────────────
+
+# Scanners to run (gitleaks, semgrep, presidio, sonarqube)
+# scanners:
+#   - presidio
+#   - gitleaks
+#   - semgrep
+
+# Output format: console (default), markdown, html, json
+# format: console
+
+# Write report to a file (leave commented to print to the terminal)
+# output: sensitive-scan-report.html
+
+# Project name shown in the report header and used as the SonarQube project key
+# project_name: MyProject
+
+# Include full git commit history in the Gitleaks scan (slower)
+# include_git_history: false
+
+# Exit with code 2 if any finding at or above this severity is found
+# Useful for CI pipelines. Values: critical, high, medium, low
+# fail_on: high
+
+# Show the full matched secret/PII value in the report instead of redacting it
+# show_secrets: false
+
+# Ignore code comments when scanning (// # <!-- /* ... */)
+# skip_comments: false
+
+# Suppress specific rule IDs from results (global — all scanners)
+# suppress:
+#   - pii_email
+#   - aws-access-token
+#   - secrets:S6706
+
+# Per-scanner rule suppression via suppress.txt ────────────────────────────────
+# Place a suppress.txt in the project root. Lines before any [section] header
+# are global; lines under a [scanner] header apply only to that scanner.
+#
+# Example suppress.txt:
+#
+#   # Global
+#   CWE-798
+#
+#   [presidio]
+#   pii_email
+#   pii_phone
+#
+#   [gitleaks]
+#   aws-access-token
+#
+#   [semgrep]
+#   python.lang.security.audit.formatted-sql-query
+#
+#   [sonarqube]
+#   secrets:S6706
+
+# Or inline in this file with suppress_by_scanner:
+# suppress_by_scanner:
+#   presidio:
+#     - pii_email
+#     - pii_phone
+#   gitleaks:
+#     - aws-access-token
+#   semgrep:
+#     - python.lang.security.audit.formatted-sql-query
+#   sonarqube:
+#     - secrets:S6706
+
+# ── Exclusions ─────────────────────────────────────────────────────────────────
+# exclude:
+#   # Plain directory names — excluded at any depth in the tree
+#   directories:
+#     - coverage
+#     - docs
+#     - migrations
+#
+#   # Glob patterns — matched against the file path relative to the scan root
+#   patterns:
+#     - "**/*.min.js"
+#     - "**/*.bundle.js"
+#     - "src/generated/**"
+#     - "tests/fixtures/**"
+#
+#   # Specific relative file paths to skip entirely
+#   files:
+#     - "tests/fixtures/sample_data.json"
+#     - "docs/examples/config.py"
