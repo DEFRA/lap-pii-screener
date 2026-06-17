@@ -98,7 +98,7 @@ def _load_meta() -> dict:
     if META_FILE.exists():
         try:
             return json.loads(META_FILE.read_text(encoding="utf-8"))
-        except Exception:
+        except (OSError, ValueError):
             pass
     return {}
 
@@ -115,7 +115,7 @@ async def _fetch_release_info(spec: BinarySpec) -> Optional[dict]:
             resp = await client.get(url, headers={"Accept": "application/vnd.github+json"})
             resp.raise_for_status()
             return resp.json()
-    except Exception as exc:
+    except (httpx.HTTPError, OSError, ValueError) as exc:
         print(f"[binary_manager] Could not fetch release info for {spec.name}: {exc}", file=sys.stderr)
         return None
 
@@ -140,7 +140,7 @@ def _extract_binary(archive_path: Path, binary_name: str, dest: Path) -> bool:
                         if f:
                             dest.write_bytes(f.read())
                             return True
-    except Exception as exc:
+    except (zipfile.BadZipFile, tarfile.TarError, OSError, KeyError) as exc:
         print(f"[binary_manager] Extraction failed for {archive_path}: {exc}", file=sys.stderr)
     return False
 
@@ -223,7 +223,7 @@ async def ensure_binary(name: str) -> Optional[Path]:
                                 file=sys.stderr,
                             )
                             return None
-            except Exception as exc:
+            except (OSError, ValueError, httpx.HTTPError) as exc:
                 print(f"[binary_manager] Checksum verification skipped: {exc}", file=sys.stderr)
 
         dest = binary_path(name)
@@ -246,7 +246,7 @@ async def ensure_binary(name: str) -> Optional[Path]:
     finally:
         try:
             tmp_path.unlink(missing_ok=True)
-        except Exception:
+        except OSError:
             pass
 
 

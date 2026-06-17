@@ -653,7 +653,7 @@ def _scan_csv_columns(file_rel: str, content: str, show_secrets: bool) -> list[F
     # ── Parse ──────────────────────────────────────────────────────────────────
     try:
         rows = list(csv.reader(io.StringIO(content), delimiter=delimiter))
-    except Exception:
+    except csv.Error:
         rows = []
 
     # ── Find the real header row ───────────────────────────────────────────────
@@ -804,7 +804,7 @@ def _extract_docx_text(data: bytes) -> Optional[str]:
                     if cell.text.strip():
                         parts.append(cell.text)
         return "\n".join(parts)
-    except Exception as exc:
+    except (OSError, ValueError) as exc:
         print(f"[pii_scanner] docx extraction failed: {exc}", file=sys.stderr)
         return None
 
@@ -822,7 +822,7 @@ def _extract_xlsx_text(data: bytes) -> Optional[str]:
                 if row_cells:
                     parts.append("\t".join(row_cells))
         return "\n".join(parts)
-    except Exception as exc:
+    except (OSError, ValueError) as exc:
         print(f"[pii_scanner] xlsx extraction failed: {exc}", file=sys.stderr)
         return None
 
@@ -833,7 +833,7 @@ def _extract_rtf_text(data: bytes) -> Optional[str]:
         return None
     try:
         return _rtf_to_text(data.decode("utf-8", errors="replace"))
-    except Exception as exc:
+    except (OSError, ValueError, UnicodeDecodeError) as exc:
         print(f"[pii_scanner] rtf extraction failed: {exc}", file=sys.stderr)
         return None
 
@@ -856,10 +856,10 @@ def _extract_eml_text(data: bytes) -> Optional[str]:
                     if payload:
                         charset = part.get_content_charset() or "utf-8"
                         parts.append(payload.decode(charset, errors="replace"))
-                except Exception:
+                except (UnicodeDecodeError, LookupError):
                     pass
         return "\n".join(parts)
-    except Exception as exc:
+    except (OSError, ValueError) as exc:
         print(f"[pii_scanner] eml extraction failed: {exc}", file=sys.stderr)
         return None
 
@@ -881,7 +881,7 @@ def _extract_xls_text(data: bytes) -> Optional[str]:
                 if row_cells:
                     parts.append("\t".join(row_cells))
         return "\n".join(parts)
-    except Exception as exc:
+    except (OSError, ValueError) as exc:
         print(f"[pii_scanner] xls extraction failed: {exc}", file=sys.stderr)
         return None
 
@@ -900,13 +900,13 @@ def _extract_doc_text(data: bytes) -> Optional[str]:
             for entry in ole.listdir(streams=True):
                 try:
                     raw = ole.openstream(entry).read()
-                except Exception:
+                except (OSError, ValueError):
                     continue
                 # UTF-16 LE (most Word 97-2003 text streams)
                 try:
                     decoded = raw.decode("utf-16-le", errors="replace")
                     parts.extend(re.findall(r'[\x20-\x7e\u00a0-\u024f]{4,}', decoded))
-                except Exception:
+                except (UnicodeDecodeError, ValueError):
                     pass
                 # ASCII runs as a secondary pass
                 parts.extend(
@@ -914,7 +914,7 @@ def _extract_doc_text(data: bytes) -> Optional[str]:
                     for s in re.findall(rb'[\x20-\x7e]{5,}', raw)
                 )
         return "\n".join(parts) if parts else None
-    except Exception as exc:
+    except (OSError, ValueError) as exc:
         print(f"[pii_scanner] doc extraction failed: {exc}", file=sys.stderr)
         return None
 
@@ -925,7 +925,7 @@ def _extract_pdf_text(data: bytes) -> Optional[str]:
         return None
     try:
         return _pdfminer_extract(io.BytesIO(data))
-    except Exception as exc:
+    except (OSError, ValueError) as exc:
         print(f"[pii_scanner] pdf extraction failed: {exc}", file=sys.stderr)
         return None
 
@@ -945,7 +945,7 @@ def _extract_msg_text(data: bytes) -> Optional[str]:
         if body:
             parts.append(body)
         return "\n".join(parts)
-    except Exception as exc:
+    except (OSError, ValueError) as exc:
         print(f"[pii_scanner] msg extraction failed: {exc}", file=sys.stderr)
         return None
 
@@ -961,7 +961,7 @@ def _extract_parquet_text(data: bytes) -> Optional[str]:
             for col in batch.columns:
                 parts.extend(s for v in col.to_pylist() if v is not None and (s := str(v).strip()))
         return "\n".join(parts)
-    except Exception as exc:
+    except (OSError, ValueError) as exc:
         print(f"[pii_scanner] parquet extraction failed: {exc}", file=sys.stderr)
         return None
 
@@ -976,7 +976,7 @@ def _extract_orc_text(data: bytes) -> Optional[str]:
         for col in table.columns:
             parts.extend(s for v in col.to_pylist() if v is not None and (s := str(v).strip()))
         return "\n".join(parts)
-    except Exception as exc:
+    except (OSError, ValueError) as exc:
         print(f"[pii_scanner] orc extraction failed: {exc}", file=sys.stderr)
         return None
 
@@ -994,7 +994,7 @@ def _extract_avro_text(data: bytes) -> Optional[str]:
                 if v is not None and (s := str(v).strip())
             )
         return "\n".join(parts)
-    except Exception as exc:
+    except (OSError, ValueError) as exc:
         print(f"[pii_scanner] avro extraction failed: {exc}", file=sys.stderr)
         return None
 
@@ -1073,7 +1073,7 @@ def _iter_archive_members(archive_name: str, data: bytes) -> Iterator[tuple[str,
                     if not info.is_dir():
                         try:
                             yield info.filename, zf.read(info)
-                        except Exception:
+                        except (zipfile.BadZipFile, OSError, KeyError):
                             pass
 
         elif lower.endswith((".tar.gz", ".tgz")):
@@ -1109,7 +1109,7 @@ def _iter_archive_members(archive_name: str, data: bytes) -> Iterator[tuple[str,
             inner_name = archive_name[:-4]  # strip .bz2 suffix
             yield inner_name, bz2.decompress(data)
 
-    except Exception as exc:
+    except (zipfile.BadZipFile, tarfile.TarError, OSError, gzip.BadGzipFile) as exc:
         print(f"[pii_scanner] Could not open archive {archive_name!r}: {exc}", file=sys.stderr)
 
 
@@ -1185,7 +1185,7 @@ def _scan_decoded_payloads(
                 findings.extend(
                     _scan_chunk_for_pii(file_rel, lineno, decoded, show_secrets, "jwt_payload")
                 )
-            except Exception:
+            except (ValueError, UnicodeDecodeError):
                 pass
 
         # ── Generic Base64 blobs ───────────────────────────────────────────────
@@ -1199,7 +1199,7 @@ def _scan_decoded_payloads(
                     findings.extend(
                         _scan_chunk_for_pii(file_rel, lineno, decoded, show_secrets, "base64_decoded")
                     )
-            except Exception:
+            except (ValueError, UnicodeDecodeError):
                 pass  # not valid UTF-8 base64 — skip silently
 
     return findings
@@ -1222,7 +1222,7 @@ class PIIScanner(AbstractScanner):
         self._lines_skipped: int = 0
         try:
             return await self._run(config)
-        except Exception as exc:
+        except (OSError, RuntimeError, ValueError) as exc:
             print(f"[pii_scanner] Scan failed: {exc}", file=sys.stderr)
             return []
 
@@ -1363,7 +1363,7 @@ class PIIScanner(AbstractScanner):
                     continue
                 try:
                     content = member_data.decode("utf-8", errors="replace")
-                except Exception:
+                except (UnicodeDecodeError, ValueError):
                     continue
 
             findings.extend(self._scan_content(member_rel, content, config.show_secrets, config.skip_comments))

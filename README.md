@@ -52,6 +52,7 @@ You do not need all four. Gitleaks + Semgrep + Presidio work without any extra i
 | Requirement | Version | Notes |
 |---|---|---|
 | Python | 3.11+ | Must be on PATH |
+| uv | Latest | Package manager — `pip install uv` |
 | Java | 17+ | Only needed for SonarQube |
 | Git | Any | Only needed if scanning commit history |
 | Docker Desktop | Any | Alternative to native Java SonarQube |
@@ -66,8 +67,8 @@ The setup wizard (`sensitive-scanner setup`) handles all binary downloads automa
 ```powershell
 git clone https://github.com/DEFRA/lap-pii-screener C:\Github\lap-pii-screener
 cd C:\Github\lap-pii-screener
-python -m pip install -r requirements.txt
-python -m pip install -e .
+pip install uv
+uv sync
 sensitive-scanner setup
 sensitive-scanner scan C:\path\to\your-project
 ```

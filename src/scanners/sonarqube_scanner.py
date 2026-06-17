@@ -260,7 +260,7 @@ class SonarQubeScanner(AbstractScanner):
     async def scan(self, config: ScanConfig) -> list[Finding]:
         try:
             return await self._run(config)
-        except Exception as exc:
+        except (OSError, RuntimeError, httpx.HTTPError, ValueError) as exc:
             print(f"[sonarqube] Scan failed: {exc}", file=sys.stderr)
             return []
 
@@ -455,7 +455,7 @@ class SonarQubeScanner(AbstractScanner):
                 resp = await client.get(url)
                 data = resp.json()
                 return data.get("status") == "UP"
-        except Exception:
+        except (httpx.HTTPError, ValueError):
             return False
 
     async def _wait_ready(self, host: str, timeout: int = 120) -> bool:
@@ -477,7 +477,7 @@ class SonarQubeScanner(AbstractScanner):
                     data={"project": project_key, "name": name},
                     headers={"Authorization": f"Bearer {token}"},
                 )
-        except Exception:
+        except httpx.HTTPError:
             pass  # Project may already exist; scanner will handle it.
 
     async def _poll_task(
@@ -497,7 +497,7 @@ class SonarQubeScanner(AbstractScanner):
                     data = resp.json()
                     if not data.get("tasks"):
                         return  # No pending tasks — analysis is done
-                except Exception:
+                except (httpx.HTTPError, ValueError):
                     pass
                 await asyncio.sleep(5)
 
@@ -536,7 +536,7 @@ class SonarQubeScanner(AbstractScanner):
                     )
                     resp.raise_for_status()
                     data = resp.json()
-                except Exception as exc:
+                except (httpx.HTTPError, ValueError) as exc:
                     print(f"[sonarqube] Failed to fetch issues: {exc}", file=sys.stderr)
                     break
 
@@ -578,7 +578,7 @@ class SonarQubeScanner(AbstractScanner):
                     )
                     resp.raise_for_status()
                     data = resp.json()
-                except Exception as exc:
+                except (httpx.HTTPError, ValueError) as exc:
                     print(f"[sonarqube] Failed to fetch hotspots: {exc}", file=sys.stderr)
                     break
 

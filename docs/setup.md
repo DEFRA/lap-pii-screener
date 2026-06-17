@@ -69,31 +69,32 @@ If you do not have Git, download the ZIP from the repository page, extract it, a
 
 ## Step 3 — Install Python packages
 
+First, install `uv` — the package manager this project uses:
+
 ```powershell
-cd C:\Github\lap-pii-screener
-python -m pip install -r requirements.txt
+pip install uv
 ```
 
-You will see a lot of text scroll past — that is normal. Wait until you get a new `PS>` prompt.
+Then install the project and all its dependencies from the lock file:
+
+```powershell
+cd C:\Github\lap-pii-screener
+uv sync
+```
+
+`uv sync` reads `uv.lock` to install every dependency at its exact pinned version. You will see a progress indicator, then a new `PS>` prompt when it finishes.
 
 ---
 
 ## Step 4 — Register the `sensitive-scanner` command
 
-This makes `sensitive-scanner` available from any folder, not just the project directory.
-
-```powershell
-cd C:\Github\lap-pii-screener
-python -m pip install -e .
-```
-
-**Verify:**
+`uv sync` (run in Step 3) installs the project in editable mode automatically, so `sensitive-scanner` is already registered as a command. Verify:
 
 ```powershell
 sensitive-scanner --help
 ```
 
-You should see a list of available commands.
+You should see a list of available commands. If you see an error, check that the `uv`-managed virtual environment is on your PATH, or re-run `uv sync` from the project folder.
 
 ---
 
@@ -249,16 +250,18 @@ This installs everything from the local bundle without making any network reques
 
 ### Python packages in air-gapped mode
 
-The `requirements.txt` file lists all dependencies with pinned versions. On a connected machine, run:
+All dependencies are pinned in `uv.lock`. On a connected machine, export them as wheels:
 
 ```powershell
-pip download -r requirements.txt --dest C:\bundle\wheels
+uv export --format requirements-txt > requirements-export.txt
+pip download -r requirements-export.txt --dest C:\bundle\wheels
 ```
 
 Transfer the `wheels` folder to the air-gapped machine alongside the code, then:
 
 ```powershell
-pip install --no-index --find-links C:\bundle\wheels -r requirements.txt
+pip install uv --no-index --find-links C:\bundle\wheels
+uv sync --no-index --find-links C:\bundle\wheels
 ```
 
 ---
@@ -320,7 +323,7 @@ Open Copilot Chat (`Ctrl+Alt+I`), ensure **Agent** mode is selected, and type na
 
 ### `sensitive-scanner` is not recognised as a command
 
-Run `python -m pip install -e .` from the `C:\Github\lap-pii-screener` folder. If that fails, check that `~\AppData\Local\Python\pythoncore-3.x\Scripts` is on your PATH.
+Run `uv sync` from the `C:\Github\lap-pii-screener` folder. If that fails, check that `uv` is installed (`pip install uv`) and that Python 3.11+ is available. You can also run the scanner directly without installing it: `python -m cli --help`.
 
 ### SonarQube does not start
 
@@ -347,10 +350,11 @@ Semgrep downloads rule definitions from the internet on first run. On subsequent
 python -m spacy download en_core_web_sm
 ```
 
-### `pip install` fails with SSL error
+### `uv sync` or `pip install` fails with SSL error
 
 Your machine may be behind a corporate proxy that intercepts SSL. Try:
 
 ```powershell
-python -m pip install --trusted-host pypi.org --trusted-host files.pythonhosted.org -r requirements.txt
+pip install --trusted-host pypi.org --trusted-host files.pythonhosted.org uv
+uv sync --trusted-host pypi.org --trusted-host files.pythonhosted.org
 ```

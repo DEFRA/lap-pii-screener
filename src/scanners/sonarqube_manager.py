@@ -71,7 +71,7 @@ def _load_meta() -> dict:
     if META_FILE.exists():
         try:
             return json.loads(META_FILE.read_text(encoding="utf-8"))
-        except Exception:
+        except (OSError, ValueError):
             pass
     return {}
 
@@ -118,10 +118,10 @@ def persist_env_var(name: str, value: str) -> bool:
                 ctypes.windll.user32.SendMessageTimeoutW(
                     0xFFFF, 0x001A, 0, "Environment", 2, 5000, None
                 )
-            except Exception:
+            except (OSError, AttributeError):
                 pass
             return True
-        except Exception as exc:
+        except OSError as exc:
             print(f"[sonarqube_manager] Could not write registry env var {name}: {exc}",
                   file=sys.stderr)
             return False
@@ -185,7 +185,7 @@ def check_java() -> tuple[bool, str]:
                     f"  Download Temurin 21 LTS: {_TEMURIN_URL}"
                 )
             return True, f"Java {major} — {java}"
-    except Exception as exc:
+    except (OSError, subprocess.SubprocessError, ValueError) as exc:
         return False, f"Could not determine Java version: {exc}"
     return True, f"Java found — {java}"
 
@@ -199,7 +199,7 @@ async def _fetch_latest_release(owner: str, repo: str) -> Optional[dict]:
             resp = await client.get(url, headers={"Accept": "application/vnd.github+json"})
             resp.raise_for_status()
             return resp.json()
-    except Exception as exc:
+    except (httpx.HTTPError, OSError, ValueError) as exc:
         print(
             f"[sonarqube_manager] Could not fetch {owner}/{repo} release: {exc}",
             file=sys.stderr,
@@ -274,7 +274,7 @@ async def _download_and_extract_zip(
 
         return dest_dir
 
-    except Exception as exc:
+    except (OSError, httpx.HTTPError, zipfile.BadZipFile) as exc:
         print(
             f"[sonarqube_manager] Download/extract failed for {label}: {exc}",
             file=sys.stderr,
@@ -283,7 +283,7 @@ async def _download_and_extract_zip(
     finally:
         try:
             tmp_path.unlink(missing_ok=True)
-        except Exception:
+        except OSError:
             pass
 
 
@@ -432,7 +432,7 @@ async def ensure_sonarqube(progress_callback=None) -> Optional[Path]:
                 script.chmod(
                     script.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
                 )
-            except Exception:
+            except OSError:
                 pass
 
     meta = _load_meta()
@@ -499,7 +499,7 @@ async def start_and_wait(
                 resp = await client.get(f"{host}/api/system/status")
                 if resp.json().get("status") == "UP":
                     return True
-            except Exception:
+            except (httpx.HTTPError, ValueError):
                 pass
             import asyncio
             await asyncio.sleep(5)
@@ -536,7 +536,7 @@ async def ensure_admin_token(host_url: str) -> tuple[Optional[str], str]:
                 auth=("admin", "admin"),
             )
             data = resp.json()
-        except Exception as exc:
+        except (httpx.HTTPError, ValueError) as exc:
             return None, f"Could not reach SonarQube API ({exc})"
 
         if resp.status_code == 401:
@@ -555,7 +555,7 @@ async def ensure_admin_token(host_url: str) -> tuple[Optional[str], str]:
                 auth=("admin", "admin"),
                 data={"name": token_name},
             )
-        except Exception:
+        except httpx.HTTPError:
             pass  # token may not exist yet — that is fine
 
         # 3. Generate a fresh token
@@ -579,7 +579,7 @@ async def ensure_admin_token(host_url: str) -> tuple[Optional[str], str]:
                     "and log in with admin / admin to complete first-time setup"
                 )
             return None, f"Token generation failed (HTTP {resp.status_code}): {body}"
-        except Exception as exc:
+        except (httpx.HTTPError, ValueError) as exc:
             return None, f"Token generation exception: {exc}"
 
     return None, "Unknown error"

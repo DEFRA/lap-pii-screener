@@ -16,7 +16,7 @@ git clone https://github.com/DEFRA/lap-pii-screener
 
 The agent finds the CLI by checking in this order:
 
-1. `sensitive-scanner` on your system PATH (available automatically after `pip install -e .`)
+1. `sensitive-scanner` on your system PATH (available automatically after `uv sync`)
 2. Any `cli.py` under `%USERPROFILE%` whose path contains `lap-pii-screener`, `PII-Screener`, or `sensitive-scanner`
 3. A `cli.py` in the current workspace root (if you opened the lap-pii-screener repo itself)
 4. Prompting you to provide the path if none of the above succeed
@@ -31,7 +31,8 @@ python --version   # must be 3.11 or higher
 
 ```
 cd C:\Github\lap-pii-screener
-pip install -r requirements.txt
+pip install uv
+uv sync
 ```
 
 ### 4. Optional — spaCy NLP model (names, addresses)
@@ -39,7 +40,7 @@ pip install -r requirements.txt
 Without spaCy, the scanner still detects structured PII (SSNs, credit cards, emails, etc.) via regex. spaCy adds unstructured entity detection (person names, locations).
 
 ```
-pip install spacy
+uv sync --extra spacy
 python -m spacy download en_core_web_sm
 ```
 
@@ -50,7 +51,7 @@ If Gitleaks is not already on your PATH, the scanner auto-downloads a pinned bin
 ### 6. Optional — Semgrep
 
 ```
-pip install semgrep
+uv sync --extra semgrep
 ```
 
 ### 7. Optional — SonarQube
