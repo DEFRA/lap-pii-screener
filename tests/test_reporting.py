@@ -42,7 +42,7 @@ def _finding(
 
 def _report(findings: list[Finding] | None = None) -> Report:
     report = Report(
-        target_path="/tmp/repo",
+        target_path="/project/repo",
         project_name="test-project",
         scanners_run=["presidio"],
         findings=findings or [],

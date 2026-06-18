@@ -833,7 +833,7 @@ def _extract_rtf_text(data: bytes) -> Optional[str]:
         return None
     try:
         return _rtf_to_text(data.decode("utf-8", errors="replace"))
-    except (OSError, ValueError, UnicodeDecodeError) as exc:
+    except (OSError, ValueError) as exc:
         print(f"[pii_scanner] rtf extraction failed: {exc}", file=sys.stderr)
         return None
 
@@ -906,7 +906,7 @@ def _extract_doc_text(data: bytes) -> Optional[str]:
                 try:
                     decoded = raw.decode("utf-16-le", errors="replace")
                     parts.extend(re.findall(r'[\x20-\x7e\u00a0-\u024f]{4,}', decoded))
-                except (UnicodeDecodeError, ValueError):
+                except (ValueError,):
                     pass
                 # ASCII runs as a secondary pass
                 parts.extend(
@@ -1109,7 +1109,7 @@ def _iter_archive_members(archive_name: str, data: bytes) -> Iterator[tuple[str,
             inner_name = archive_name[:-4]  # strip .bz2 suffix
             yield inner_name, bz2.decompress(data)
 
-    except (zipfile.BadZipFile, tarfile.TarError, OSError, gzip.BadGzipFile) as exc:
+    except (zipfile.BadZipFile, tarfile.TarError, OSError) as exc:
         print(f"[pii_scanner] Could not open archive {archive_name!r}: {exc}", file=sys.stderr)
 
 
@@ -1185,7 +1185,7 @@ def _scan_decoded_payloads(
                 findings.extend(
                     _scan_chunk_for_pii(file_rel, lineno, decoded, show_secrets, "jwt_payload")
                 )
-            except (ValueError, UnicodeDecodeError):
+            except (ValueError,):
                 pass
 
         # ── Generic Base64 blobs ───────────────────────────────────────────────
@@ -1199,7 +1199,7 @@ def _scan_decoded_payloads(
                     findings.extend(
                         _scan_chunk_for_pii(file_rel, lineno, decoded, show_secrets, "base64_decoded")
                     )
-            except (ValueError, UnicodeDecodeError):
+            except (ValueError,):
                 pass  # not valid UTF-8 base64 — skip silently
 
     return findings
@@ -1363,7 +1363,7 @@ class PIIScanner(AbstractScanner):
                     continue
                 try:
                     content = member_data.decode("utf-8", errors="replace")
-                except (UnicodeDecodeError, ValueError):
+                except (ValueError,):
                     continue
 
             findings.extend(self._scan_content(member_rel, content, config.show_secrets, config.skip_comments))

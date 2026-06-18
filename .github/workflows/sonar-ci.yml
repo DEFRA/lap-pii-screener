@@ -1,22 +1,20 @@
-name: SonarCloud Analysis
+name: SonarCloud — CI (main)
 
 on:
   push:
     branches:
       - main
-  pull_request:
-    types: [opened, synchronize, reopened]
 
 jobs:
-  sonar:
-    name: SonarCloud
+  sonar-ci:
+    name: SonarCloud CI
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0   # full history required for blame data and new-code detection
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -27,12 +25,11 @@ jobs:
         run: pip install uv
 
       - name: Install dependencies
-        run: uv sync --locked
+        run: uv sync --locked --extra dev
 
       - name: Run tests with coverage
-        run: |
-          uv run pytest tests/ --cov=src --cov-report=xml --cov-report=term-missing -q
-        continue-on-error: true   # don't block Sonar if tests fail
+        run: uv run pytest tests/ --cov=src --cov-report=xml --cov-report=term-missing -q
+        continue-on-error: true
 
       - name: SonarCloud Scan
         uses: SonarSource/sonarqube-scan-action@v5

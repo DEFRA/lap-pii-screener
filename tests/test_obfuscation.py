@@ -106,7 +106,7 @@ class TestGetReplacement:
 class TestReviewSessionFromFindings:
     def test_obfuscatable_finding_is_pending(self) -> None:
         f = _finding(match="john.doe@example.com")
-        session = ReviewSession.from_findings([f], scan_id="abc123", target_path="/tmp")
+        session = ReviewSession.from_findings([f], scan_id="abc123", target_path="/project")
 
         item = session.items[0]
         assert item.decision == "pending"
@@ -115,7 +115,7 @@ class TestReviewSessionFromFindings:
 
     def test_binary_extension_is_manual(self) -> None:
         f = _finding(file="archive.zip", match="sk_live_abc")
-        session = ReviewSession.from_findings([f], scan_id="abc123", target_path="/tmp")
+        session = ReviewSession.from_findings([f], scan_id="abc123", target_path="/project")
 
         item = session.items[0]
         assert item.decision == "manual"
@@ -124,13 +124,13 @@ class TestReviewSessionFromFindings:
 
     def test_docx_extension_is_manual(self) -> None:
         f = _finding(file="report.docx", match="john@example.com")
-        session = ReviewSession.from_findings([f], scan_id="abc123", target_path="/tmp")
+        session = ReviewSession.from_findings([f], scan_id="abc123", target_path="/project")
 
         assert session.items[0].decision == "manual"
 
     def test_redacted_match_is_manual(self) -> None:
         f = _finding(match="abcd****")
-        session = ReviewSession.from_findings([f], scan_id="abc123", target_path="/tmp")
+        session = ReviewSession.from_findings([f], scan_id="abc123", target_path="/project")
 
         item = session.items[0]
         assert item.decision == "manual"
@@ -139,36 +139,36 @@ class TestReviewSessionFromFindings:
 
     def test_empty_match_is_manual(self) -> None:
         f = _finding(match="")
-        session = ReviewSession.from_findings([f], scan_id="abc123", target_path="/tmp")
+        session = ReviewSession.from_findings([f], scan_id="abc123", target_path="/project")
 
         assert session.items[0].decision == "manual"
 
     def test_empty_findings_list(self) -> None:
-        session = ReviewSession.from_findings([], scan_id="abc123", target_path="/tmp")
+        session = ReviewSession.from_findings([], scan_id="abc123", target_path="/project")
 
         assert session.items == []
 
     def test_replacement_token_set_from_category(self) -> None:
         f = _finding(category="pii_email", match="john@example.com")
-        session = ReviewSession.from_findings([f], scan_id="abc123", target_path="/tmp")
+        session = ReviewSession.from_findings([f], scan_id="abc123", target_path="/project")
 
         assert session.items[0].replacement == "[REDACTED_EMAIL]"
 
     def test_match_display_is_redacted_for_obfuscatable(self) -> None:
         f = _finding(match="john.doe@example.com")
-        session = ReviewSession.from_findings([f], scan_id="abc123", target_path="/tmp")
+        session = ReviewSession.from_findings([f], scan_id="abc123", target_path="/project")
 
         assert "****" in session.items[0].match_display
 
     def test_match_display_is_raw_for_non_obfuscatable(self) -> None:
         f = _finding(file="archive.zip", match="abcd****")
-        session = ReviewSession.from_findings([f], scan_id="abc123", target_path="/tmp")
+        session = ReviewSession.from_findings([f], scan_id="abc123", target_path="/project")
 
         assert session.items[0].match_display == "abcd****"
 
     def test_multiple_findings_creates_multiple_items(self) -> None:
         findings = [_finding(line=i) for i in range(1, 6)]
-        session = ReviewSession.from_findings(findings, scan_id="abc123", target_path="/tmp")
+        session = ReviewSession.from_findings(findings, scan_id="abc123", target_path="/project")
 
         assert len(session.items) == 5
 
@@ -183,7 +183,7 @@ class TestReviewSessionFilters:
     @pytest.fixture
     def mixed_session(self) -> ReviewSession:
         findings = [_finding(line=i) for i in range(1, 5)]
-        session = ReviewSession.from_findings(findings, scan_id="abc123", target_path="/tmp")
+        session = ReviewSession.from_findings(findings, scan_id="abc123", target_path="/project")
         session.items[0].decision = "approved"
         session.items[1].decision = "skipped"
         session.items[2].decision = "manual"
@@ -229,7 +229,7 @@ class TestReviewSessionPersistence:
         session = ReviewSession.from_findings(
             [_finding(match="john@example.com")],
             scan_id="save-test-01",
-            target_path="/tmp",
+            target_path="/project",
         )
         session_path = tmp_path / "session.json"
         result = session.save(session_path)
@@ -239,7 +239,7 @@ class TestReviewSessionPersistence:
 
     def test_load_roundtrip(self, tmp_path: Path) -> None:
         findings = [_finding(match="john@example.com")]
-        session = ReviewSession.from_findings(findings, scan_id="rt-test-01", target_path="/tmp")
+        session = ReviewSession.from_findings(findings, scan_id="rt-test-01", target_path="/project")
         session_path = tmp_path / "session.json"
         session.save(session_path)
 
@@ -250,7 +250,7 @@ class TestReviewSessionPersistence:
         assert loaded.items[0].category == "pii_email"
 
     def test_save_creates_parent_directories(self, tmp_path: Path) -> None:
-        session = ReviewSession.from_findings([], scan_id="dir-test", target_path="/tmp")
+        session = ReviewSession.from_findings([], scan_id="dir-test", target_path="/project")
         deep_path = tmp_path / "a" / "b" / "c" / "session.json"
         session.save(deep_path)
 
@@ -260,7 +260,7 @@ class TestReviewSessionPersistence:
         session = ReviewSession.from_findings(
             [_finding(match="john@example.com")],
             scan_id="fallback-01",
-            target_path="/tmp",
+            target_path="/project",
         )
         fallback_home = tmp_path / "home"
         fallback_home.mkdir()
