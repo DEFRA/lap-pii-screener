@@ -172,6 +172,9 @@ class SemgrepScanner(AbstractScanner):
         return "semgrep"
 
     async def is_available(self) -> bool:
+        # Use asyncio.sleep(0) to yield to the event loop — this method is
+        # intentionally async to satisfy the AbstractScanner interface contract.
+        await asyncio.sleep(0)
         if _find_semgrep():
             return True
         return detect_container_runtime() is not None
@@ -295,7 +298,10 @@ class SemgrepScanner(AbstractScanner):
 
         # Extract a snippet to redact
         lines_snippet: str = extra.get("lines", "").strip()
-        match_redacted = (lines_snippet if lines_snippet else "****") if show_secrets else (Finding.redact(lines_snippet) if lines_snippet else "****")
+        if show_secrets:
+            match_redacted = lines_snippet if lines_snippet else "****"
+        else:
+            match_redacted = Finding.redact(lines_snippet) if lines_snippet else "****"
 
         category, rule = _ENGINE.resolve(check_id)
         if rule:

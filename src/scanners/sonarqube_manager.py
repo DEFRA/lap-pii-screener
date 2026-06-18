@@ -36,6 +36,7 @@ import httpx
 
 # Fixed port — avoids ZScaler blocking of 9000 for every team member.
 SONAR_PORT: int = 9100
+_SONAR_SH = "sonar.sh"
 
 _BASE_DIR = Path.home() / ".sensitive-scanner"
 _SQ_DIR = _BASE_DIR / "sonarqube"
@@ -427,7 +428,7 @@ async def ensure_sonarqube(progress_callback=None) -> Optional[Path]:
 
     # Make start scripts executable on Unix
     if _system() != "windows":
-        for script in (_SQ_DIR / "bin").rglob("sonar.sh"):
+        for script in (_SQ_DIR / "bin").rglob(_SONAR_SH):
             try:
                 script.chmod(
                     script.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
@@ -450,9 +451,9 @@ def _start_script(sq_home: Path) -> Optional[Path]:
         s = sq_home / "bin" / "windows-x86-64" / "StartSonar.bat"
     elif system == "Linux":
         arch = "aarch64" if ("arm" in machine or "aarch" in machine) else "x86-64"
-        s = sq_home / "bin" / f"linux-{arch}" / "sonar.sh"
+        s = sq_home / "bin" / f"linux-{arch}" / _SONAR_SH
     else:
-        s = sq_home / "bin" / "macosx-universal-64" / "sonar.sh"
+        s = sq_home / "bin" / "macosx-universal-64" / _SONAR_SH
     return s if s.exists() else None
 
 
@@ -491,12 +492,12 @@ async def start_and_wait(
     host = f"http://localhost:{port}"
     start = time.monotonic()
 
-    async with httpx.AsyncClient(timeout=5) as client:
+    async with httpx.AsyncClient() as client:
         while (elapsed := time.monotonic() - start) < timeout:
             if tick_callback:
                 tick_callback(int(elapsed), timeout)
             try:
-                resp = await client.get(f"{host}/api/system/status")
+                resp = await client.get(f"{host}/api/system/status", timeout=5)
                 if resp.json().get("status") == "UP":
                     return True
             except (httpx.HTTPError, ValueError):

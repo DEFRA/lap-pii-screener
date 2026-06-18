@@ -58,6 +58,9 @@ _FORMAT_RENDERERS = {
 }
 
 _VALID_SCANNERS = {"gitleaks", "semgrep", "presidio", "sonarqube"}
+_SUPPRESS_FILE = "suppress.txt"
+_LABEL_SONARQUBE_CE = "SonarQube CE"
+_LABEL_SONARQUBE_START = "SonarQube start"
 _VALID_FORMATS = set(_FORMAT_RENDERERS)
 
 
@@ -148,7 +151,7 @@ def scan(
             "Defaults to all available."
         ),
     ),
-    format: str = typer.Option(   # noqa: A002
+    fmt: str = typer.Option(   # noqa: A002
         "console",
         "--format", "-f",
         help="Output format: console (default), markdown, html, json.",
@@ -254,8 +257,8 @@ def scan(
             raise typer.Exit(code=1)
 
     # Validate format
-    if format not in _VALID_FORMATS:
-        _console.print(f"[bold red]Unknown format:[/bold red] {format!r}")
+    if fmt not in _VALID_FORMATS:
+        _console.print(f"[bold red]Unknown format:[/bold red] {fmt!r}")
         _console.print(f"Valid options: {', '.join(sorted(_VALID_FORMATS))}")
         raise typer.Exit(code=1)
 
@@ -275,8 +278,8 @@ def scan(
     # Merge config file values — CLI flags take precedence (None = not supplied)
     if scanners is None and _cfg.get("scanners"):
         scanners = ",".join(_cfg["scanners"]) if isinstance(_cfg["scanners"], list) else str(_cfg["scanners"])
-    if format == "console" and _cfg.get("format"):
-        format = _cfg["format"]  # noqa: A001
+    if fmt == "console" and _cfg.get("format"):
+        fmt = _cfg["format"]
     if output is None and _cfg.get("output"):
         output = Path(_cfg["output"])
     if project_name is None and _cfg.get("project_name"):
@@ -305,8 +308,8 @@ def scan(
         for scanner, rules in per.items():
             _suppress_by_scanner.setdefault(scanner, []).extend(rules)
 
-    _merge_suppress(_ROOT / "config" / "suppress.txt")   # global install-level
-    _merge_suppress(target / "suppress.txt")              # per-project
+    _merge_suppress(_ROOT / "config" / _SUPPRESS_FILE)   # global install-level
+    _merge_suppress(target / _SUPPRESS_FILE)              # per-project
 
     # Per-scanner rules from sensitive-scanner.yaml suppress_by_scanner key
     _cfg_sbs = _cfg.get("suppress_by_scanner", {})
@@ -428,7 +431,7 @@ def scan(
 
     if per_file or output_dir is not None:
         _dir = output_dir or Path("scan-reports")
-        written = _render_and_write_per_file(report, format, _dir)
+        written = _render_and_write_per_file(report, fmt, _dir)
         if written:
             _console.print(
                 f"\n[bold green]Per-file reports written:[/bold green] "
@@ -436,7 +439,7 @@ def scan(
             )
         else:
             _console.print("\n[dim]No findings — no per-file reports written.[/dim]")
-    elif format == "html" and session_file is not None:
+    elif fmt == "html" and session_file is not None:
         from obfuscation.session import ReviewSession as _ReviewSession
         if not session_file.exists():
             _console.print(
@@ -451,7 +454,7 @@ def scan(
         else:
             print(content)
     else:
-        _render_and_write(report, format, output)
+        _render_and_write(report, fmt, output)
 
     # --fail-on exit code
     if fail_on:
@@ -549,7 +552,7 @@ def status() -> None:
     for line in lines:
         _console.print(line)
     _console.print(f"\n[bold]Active tier: {tier}[/bold]  —  {tier_labels[tier]}")
-    _console.print(f"\n[dim]Run [bold]sensitive-scanner setup[/bold] to install missing tools.  Add [bold]--sonarqube[/bold] or [bold]--all[/bold] for full setup.[/dim]")
+    _console.print("\n[dim]Run [bold]sensitive-scanner setup[/bold] to install missing tools.  Add [bold]--sonarqube[/bold] or [bold]--all[/bold] for full setup.[/dim]")
 
 
 @app.command()
@@ -747,7 +750,7 @@ def setup(
         if not java_ok:
             _fail("Java 17+", java_msg)
             _skip("sonar-scanner-cli", "skipped — Java required")
-            _skip("SonarQube CE", "skipped — Java required")
+            _skip(_LABEL_SONARQUBE_CE, "skipped — Java required")
         else:
             _ok("Java 17+", java_msg)
 
@@ -777,9 +780,9 @@ def setup(
                 if not check:
                     from scanners.sonarqube_manager import patch_sonar_port
                     patch_sonar_port(sq_home)
-                _ok("SonarQube CE", f"port {SONAR_PORT} — {sq_home}")
+                _ok(_LABEL_SONARQUBE_CE, f"port {SONAR_PORT} — {sq_home}")
             elif check:
-                _warn("SonarQube CE", "not installed")
+                _warn(_LABEL_SONARQUBE_CE, "not installed")
             else:
                 if not non_interactive:
                     _console.print(
@@ -793,11 +796,11 @@ def setup(
                     try:
                         path = asyncio.run(ensure_sonarqube())
                         if path:
-                            _ok("SonarQube CE", f"port {SONAR_PORT} — {path}")
+                            _ok(_LABEL_SONARQUBE_CE, f"port {SONAR_PORT} — {path}")
                         else:
-                            _fail("SonarQube CE", "download failed — check internet connection")
+                            _fail(_LABEL_SONARQUBE_CE, "download failed — check internet connection")
                     except Exception as exc:
-                        _fail("SonarQube CE", str(exc))
+                        _fail(_LABEL_SONARQUBE_CE, str(exc))
 
             # 5d. Start SonarQube + token (only when we just installed or on explicit request)
             sq_home = _find_native_sonarqube()
@@ -811,10 +814,10 @@ def setup(
                     up = asyncio.run(start_and_wait(sq_home, port=SONAR_PORT, timeout=180))
                 except Exception as exc:
                     up = False
-                    _fail("SonarQube start", str(exc))
+                    _fail(_LABEL_SONARQUBE_START, str(exc))
 
                 if up:
-                    _ok("SonarQube start", f"running at {host_url}")
+                    _ok(_LABEL_SONARQUBE_START, f"running at {host_url}")
                     # 5e. Auto-create token
                     try:
                         token, token_reason = asyncio.run(ensure_admin_token(host_url))
@@ -829,13 +832,13 @@ def setup(
                         _ok("Admin token", env_note)
                         _ok("SONAR_HOST_URL", host_url)
                         _console.print(
-                            f"\n  [bold green]✔ SONAR_TOKEN[/bold green] and "
-                            f"[bold green]SONAR_HOST_URL[/bold green] have been written "
-                            f"to your user environment automatically."
+                            "\n  [bold green]✔ SONAR_TOKEN[/bold green] and "
+                            "[bold green]SONAR_HOST_URL[/bold green] have been written "
+                            "to your user environment automatically."
                         )
                         _console.print(
-                            f"  Open a [bold]new[/bold] terminal window for them to "
-                            f"take effect in future sessions."
+                            "  Open a [bold]new[/bold] terminal window for them to "
+                            "take effect in future sessions."
                         )
                         _console.print(
                             f"\n  [dim]SONAR_TOKEN=[/dim][bold]{token}[/bold]"
@@ -856,20 +859,20 @@ def setup(
                             f"[link]{host_url}/account/security[/link]"
                         )
                         _console.print(
-                            f"  Then run:\n"
-                            f"  [bold]sensitive-scanner setup --sonarqube[/bold]\n"
-                            f"  — or set it manually in a new terminal:\n"
-                            f"  [dim][Environment]::SetEnvironmentVariable"
-                            f'("SONAR_TOKEN", "<your-token>", "User")[/dim]'
+                            "  Then run:\n"
+                            "  [bold]sensitive-scanner setup --sonarqube[/bold]\n"
+                            "  — or set it manually in a new terminal:\n"
+                            "  [dim][Environment]::SetEnvironmentVariable"
+                            '("SONAR_TOKEN", "<your-token>", "User")[/dim]'
                         )
                 else:
-                    _warn("SonarQube start", "did not become UP within 3 min — try starting manually")
+                    _warn(_LABEL_SONARQUBE_START, "did not become UP within 3 min — try starting manually")
     else:
         sq_home = _find_native_sonarqube()
         if sq_home:
-            _ok("SonarQube CE", f"installed at {sq_home}")
+            _ok(_LABEL_SONARQUBE_CE, f"installed at {sq_home}")
         else:
-            _skip("SonarQube CE", "optional — add --sonarqube to auto-download")
+            _skip(_LABEL_SONARQUBE_CE, "optional — add --sonarqube to auto-download")
 
     # ── Summary table ─────────────────────────────────────────────────────────
     _console.print()
@@ -896,7 +899,7 @@ def setup(
 
 @app.command()
 def report(
-    format: str = typer.Option(   # noqa: A002
+    fmt: str = typer.Option(
         "console",
         "--format", "-f",
         help="Output format: console (default), markdown, html, json.",
@@ -913,8 +916,8 @@ def report(
     ),
 ) -> None:
     """Display or export the report from the last scan (no re-scan)."""
-    if format not in _VALID_FORMATS:
-        _console.print(f"[bold red]Unknown format:[/bold red] {format!r}")
+    if fmt not in _VALID_FORMATS:
+        _console.print(f"[bold red]Unknown format:[/bold red] {fmt!r}")
         raise typer.Exit(code=1)
 
     cached = load_cached_report()
@@ -922,7 +925,7 @@ def report(
         _console.print("[bold yellow]No cached report found.[/bold yellow] Run [bold]scan[/bold] first.")
         raise typer.Exit(code=1)
 
-    if format == "html" and show_confidence:
+    if fmt == "html" and show_confidence:
         from reporting.html_reporter import render_html as _render_html
         content = _render_html(cached, show_confidence=True)
         if output:
@@ -931,7 +934,7 @@ def report(
         else:
             print(content)
     else:
-        _render_and_write(cached, format, output)
+        _render_and_write(cached, fmt, output)
 
 
 # ── obfuscate command ─────────────────────────────────────────────────────────
@@ -1050,8 +1053,8 @@ def obfuscate(
         for sc, rules in per.items():
             _suppress_by_scanner.setdefault(sc, []).extend(rules)
 
-    _merge_sup(_ROOT / "config" / "suppress.txt")
-    _merge_sup(target / "suppress.txt")
+    _merge_sup(_ROOT / "config" / _SUPPRESS_FILE)
+    _merge_sup(target / _SUPPRESS_FILE)
 
     # ── --apply / --apply-session shortcut (no scan, no TUI) ─────────────────
     _resolved_session = apply_session_file or (_session_path if apply_default else None)
@@ -1067,7 +1070,7 @@ def obfuscate(
             before = len(session.items)
             session.items = [
                 i for i in session.items
-                if not (i.rule_id in _persistent_suppress)
+                if i.rule_id not in _persistent_suppress
             ]
             dropped = before - len(session.items)
             if dropped:
@@ -1318,7 +1321,6 @@ def edit(
       sensitive-scanner edit a1b2c3d4e5f6a1b2 --report scan-reports/report.html
     """
     from obfuscation.session import ReviewSession
-    from rich.table import Table
 
     _session_path = Path(session_file) if session_file else Path.cwd() / "pii-review-session.json"
 

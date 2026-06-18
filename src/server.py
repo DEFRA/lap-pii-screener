@@ -37,7 +37,7 @@ import os
 import shutil
 
 mcp = FastMCP("sensitive-code-scanner")
-
+_NO_REPORT_MSG = "No scan report found. Run `scan_codebase` first."
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -125,7 +125,7 @@ async def get_report(format: str = "markdown") -> str:
     """
     report = load_cached_report()
     if report is None:
-        return "No scan report found. Run `scan_codebase` first."
+        return _NO_REPORT_MSG
     return _render(report, format)
 
 
@@ -150,7 +150,7 @@ async def list_findings(
     """
     report = load_cached_report()
     if report is None:
-        return "No scan report found. Run `scan_codebase` first."
+        return _NO_REPORT_MSG
 
     findings = report.findings
 
@@ -191,7 +191,7 @@ async def get_remediation(finding_id: str) -> str:
     """
     report = load_cached_report()
     if report is None:
-        return "No scan report found. Run `scan_codebase` first."
+        return _NO_REPORT_MSG
 
     match = next((f for f in report.findings if f.id == finding_id), None)
     if not match:
@@ -204,7 +204,7 @@ async def get_remediation(finding_id: str) -> str:
         f"**Detected by:** {', '.join(match.scanners)}",
         f"**Redacted match:** `{match.match}`",
         "",
-        f"### What was found",
+        "### What was found",
         match.remediation_description or match.message or "_No description available._",
         "",
     ]
