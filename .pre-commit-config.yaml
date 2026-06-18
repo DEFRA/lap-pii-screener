@@ -1,0 +1,23 @@
+repos:
+  # ── Ruff: linting + formatting (DEFRA mandated) ────────────────────────────
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.17
+    hooks:
+      - id: ruff
+        name: ruff lint
+        args: [--fix, --exit-non-zero-on-fix]
+      - id: ruff-format
+        name: ruff format
+
+  # ── Sensitive Code Scanner: detect PII / secrets before commit ─────────────
+  - repo: local
+    hooks:
+      - id: sensitive-scanner
+        name: Sensitive Code Scanner
+        entry: uv run sensitive-scanner scan . --scanners presidio --format console
+        language: system
+        pass_filenames: false
+        always_run: true
+        # Fail the commit if any finding is detected.
+        # Remove or change --scanners to also run gitleaks/semgrep if those
+        # binaries are installed on every developer machine.

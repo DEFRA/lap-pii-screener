@@ -1,6 +1,8 @@
 """Tests for models.finding and models.report."""
 from __future__ import annotations
 
+import pytest
+
 from models.finding import Finding, ScanConfig, _DEFAULT_EXCLUDE
 from models.report import Report, ScanSummary
 
@@ -36,23 +38,23 @@ def _finding(
 
 class TestScanConfig:
     def test_default_scanners(self) -> None:
-        config = ScanConfig(path="/tmp/repo")
+        config = ScanConfig(path="/project/repo")
 
         assert "gitleaks" in config.scanners
         assert "presidio" in config.scanners
 
     def test_default_project_name(self) -> None:
-        assert ScanConfig(path="/tmp/repo").project_name == "project"
+        assert ScanConfig(path="/project/repo").project_name == "project"
 
     def test_default_flags_are_false(self) -> None:
-        config = ScanConfig(path="/tmp/repo")
+        config = ScanConfig(path="/project/repo")
 
         assert config.include_git_history is False
         assert config.show_secrets is False
         assert config.skip_comments is False
 
     def test_default_exclude_paths_populated(self) -> None:
-        config = ScanConfig(path="/tmp/repo")
+        config = ScanConfig(path="/project/repo")
 
         assert ".git" in config.exclude_paths
         assert "node_modules" in config.exclude_paths
@@ -60,7 +62,7 @@ class TestScanConfig:
 
     def test_custom_values(self) -> None:
         config = ScanConfig(
-            path="/tmp/repo",
+            path="/project/repo",
             scanners=["presidio"],
             project_name="my-project",
             show_secrets=True,
@@ -79,7 +81,7 @@ class TestScanConfig:
         assert "dist" in _DEFAULT_EXCLUDE
 
     def test_suppress_fields_default_empty(self) -> None:
-        config = ScanConfig(path="/tmp/repo")
+        config = ScanConfig(path="/project/repo")
 
         assert config.suppress_global == []
         assert config.suppress_by_scanner == {}
@@ -132,7 +134,7 @@ class TestFinding:
     def test_finding_default_confidence(self) -> None:
         f = _finding()
 
-        assert f.confidence == 0.70
+        assert f.confidence == pytest.approx(0.70)
 
     def test_finding_default_collections_empty(self) -> None:
         f = _finding()
@@ -182,18 +184,18 @@ class TestScanSummary:
 
 class TestReport:
     def test_scan_id_auto_generated(self) -> None:
-        r = Report(target_path="/tmp", project_name="test")
+        r = Report(target_path="/project", project_name="test")
 
         assert len(r.scan_id) == 8
 
     def test_two_reports_have_different_ids(self) -> None:
-        r1 = Report(target_path="/tmp", project_name="test")
-        r2 = Report(target_path="/tmp", project_name="test")
+        r1 = Report(target_path="/project", project_name="test")
+        r2 = Report(target_path="/project", project_name="test")
 
         assert r1.scan_id != r2.scan_id
 
     def test_build_summary_empty_findings(self) -> None:
-        report = Report(target_path="/tmp", project_name="test", findings=[])
+        report = Report(target_path="/project", project_name="test", findings=[])
         report.build_summary()
 
         assert report.summary.total == 0
@@ -207,7 +209,7 @@ class TestReport:
             _finding(severity="low", line=40),
             _finding(severity="info", line=50),
         ]
-        report = Report(target_path="/tmp", project_name="test", findings=findings)
+        report = Report(target_path="/project", project_name="test", findings=findings)
         report.build_summary()
         s = report.summary
 
@@ -220,7 +222,7 @@ class TestReport:
 
     def test_build_summary_unknown_severity_counted_as_info(self) -> None:
         findings = [_finding(severity="unknown")]
-        report = Report(target_path="/tmp", project_name="test", findings=findings)
+        report = Report(target_path="/project", project_name="test", findings=findings)
         report.build_summary()
 
         assert report.summary.info == 1
@@ -231,7 +233,7 @@ class TestReport:
             _finding(category="pii_email", line=20),
             _finding(category="api_key_aws_access", line=30),
         ]
-        report = Report(target_path="/tmp", project_name="test", findings=findings)
+        report = Report(target_path="/project", project_name="test", findings=findings)
         report.build_summary()
 
         assert report.summary.by_category["pii_email"] == 2
@@ -242,7 +244,7 @@ class TestReport:
             _finding(scanners=["presidio", "gitleaks"]),
             _finding(scanners=["presidio"], line=20),
         ]
-        report = Report(target_path="/tmp", project_name="test", findings=findings)
+        report = Report(target_path="/project", project_name="test", findings=findings)
         report.build_summary()
 
         assert report.summary.by_scanner["presidio"] == 2
@@ -250,7 +252,7 @@ class TestReport:
 
     def test_build_summary_total_matches_findings_count(self) -> None:
         findings = [_finding(line=i) for i in range(1, 8)]
-        report = Report(target_path="/tmp", project_name="test", findings=findings)
+        report = Report(target_path="/project", project_name="test", findings=findings)
         report.build_summary()
 
         assert report.summary.total == 7

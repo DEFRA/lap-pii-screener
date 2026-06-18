@@ -119,5 +119,5 @@ class TestAbstractScanner:
                 return []
 
         scanner = _ConcreteScanner()
-        result = await scanner.scan(ScanConfig(path="/tmp"))
+        result = await scanner.scan(ScanConfig(path="/project"))
         assert isinstance(result, list)

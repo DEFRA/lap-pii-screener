@@ -1,0 +1,38 @@
+name: SonarCloud — PR check
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  sonar-pr:
+    name: SonarCloud PR
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read   # SonarCloud reads PR metadata for decoration
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Install dependencies
+        run: uv sync --locked --extra dev
+
+      - name: Run tests with coverage
+        run: uv run pytest tests/ --cov=src --cov-report=xml --cov-report=term-missing -q
+        continue-on-error: true
+
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarqube-scan-action@v5
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

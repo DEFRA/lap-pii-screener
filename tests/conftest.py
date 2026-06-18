@@ -40,7 +40,7 @@ def make_finding(
 
 def make_report(findings: list[Finding] | None = None) -> Report:
     report = Report(
-        target_path="/tmp/test-repo",
+        target_path="/project/test-repo",
         project_name="test-project",
         scanners_run=["presidio"],
         findings=findings or [],
@@ -61,7 +61,7 @@ def finding() -> Finding:
 
 @pytest.fixture
 def scan_config() -> ScanConfig:
-    return ScanConfig(path="/tmp/repo", project_name="test-project")
+    return ScanConfig(path="/project/repo", project_name="test-project")
 
 
 @pytest.fixture
