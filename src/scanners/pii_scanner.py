@@ -317,7 +317,7 @@ _TEXT_EXTENSIONS = {
     ".sh", ".bash", ".zsh", ".ps1", ".psm1", ".yml", ".yaml", ".json",
     ".xml", ".toml", ".ini", ".cfg", ".conf", ".env", ".properties",
     ".tf", ".tfvars", ".hcl", ".sql", ".md", ".txt", ".html", ".htm",
-    ".vue", ".svelte", ".ejs", ".jsx",
+    ".vue", ".svelte", ".ejs",
     ".csv", ".tsv", ".psv",
 }
 
@@ -1041,7 +1041,7 @@ def _is_archive_path(path: Path) -> bool:
     """Return True if path is a supported archive format."""
     name = path.name.lower()
     return (
-        name.endswith((".tar.gz", ".tar.bz2", ".tgz"))
+        name.endswith((_TAR_GZ, _TAR_BZ2, ".tgz"))
         or path.suffix.lower() in {".zip", ".gz", ".bz2", ".tar"}
     )
 
@@ -1049,7 +1049,7 @@ def _is_archive_path(path: Path) -> bool:
 def _is_archive_name(name: str) -> bool:
     """Return True if a virtual member name is a supported archive format."""
     lower = name.lower()
-    return lower.endswith((".tar.gz", ".tar.bz2", ".tgz", ".zip", ".gz", ".bz2", ".tar"))
+    return lower.endswith((_TAR_GZ, _TAR_BZ2, ".tgz", ".zip", ".gz", ".bz2", ".tar"))
 
 
 def _should_scan_name(name: str) -> bool:
@@ -1076,7 +1076,7 @@ def _iter_archive_members(archive_name: str, data: bytes) -> Iterator[tuple[str,
                         except (zipfile.BadZipFile, OSError, KeyError):
                             pass
 
-        elif lower.endswith((".tar.gz", ".tgz")):
+        elif lower.endswith((_TAR_GZ, ".tgz")):
             with tarfile.open(fileobj=buf, mode="r:gz") as tf:
                 for member in tf.getmembers():
                     if member.isfile():
@@ -1084,7 +1084,7 @@ def _iter_archive_members(archive_name: str, data: bytes) -> Iterator[tuple[str,
                         if f:
                             yield member.name, f.read()
 
-        elif lower.endswith(".tar.bz2"):
+        elif lower.endswith(_TAR_BZ2):
             with tarfile.open(fileobj=buf, mode="r:bz2") as tf:
                 for member in tf.getmembers():
                     if member.isfile():

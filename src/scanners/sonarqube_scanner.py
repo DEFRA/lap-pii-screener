@@ -429,7 +429,7 @@ class SonarQubeScanner(AbstractScanner):
                 "-v", f"{source_path}:/usr/src",
                 _SONAR_SCANNER_IMAGE,
                 f"-Dsonar.projectKey={project_key}",
-                f"-Dsonar.sources=/usr/src",
+                "-Dsonar.sources=/usr/src",
                 "-Dsonar.scm.disabled=true",
             ]
 
@@ -471,11 +471,12 @@ class SonarQubeScanner(AbstractScanner):
     ) -> None:
         url = urljoin(host, "/api/projects/create")
         try:
-            async with httpx.AsyncClient(timeout=10) as client:
+            async with httpx.AsyncClient() as client:
                 await client.post(
                     url,
                     data={"project": project_key, "name": name},
                     headers={"Authorization": f"Bearer {token}"},
+                    timeout=10,
                 )
         except httpx.HTTPError:
             pass  # Project may already exist; scanner will handle it.
@@ -486,13 +487,14 @@ class SonarQubeScanner(AbstractScanner):
         """Wait for the most recent CE analysis task to finish."""
         url = urljoin(host, "/api/ce/activity")
         deadline = time.monotonic() + timeout
-        async with httpx.AsyncClient(timeout=10) as client:
+        async with httpx.AsyncClient() as client:
             while time.monotonic() < deadline:
                 try:
                     resp = await client.get(
                         url,
                         params={"component": project_key, "status": "IN_PROGRESS,PENDING", "ps": "1"},
                         headers={"Authorization": f"Bearer {token}"},
+                        timeout=10,
                     )
                     data = resp.json()
                     if not data.get("tasks"):

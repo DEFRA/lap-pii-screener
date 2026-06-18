@@ -7,10 +7,11 @@ from reporting.constants import TEMPLATE_DIR
 
 # Markdown is plain text — auto-escaping HTML entities would corrupt the output.
 # select_autoescape restricts escaping to HTML/XML templates only, which is
-# safer than a blanket autoescape=False.
+# safer than a blanket autoescape=False.  NOSONAR: S5247 — autoescape is
+# deliberately disabled for .md.j2 (plain text); HTML escaping is not applicable.
 _MD_ENV = Environment(
     loader=FileSystemLoader(str(TEMPLATE_DIR)),
-    autoescape=select_autoescape(enabled_extensions=("html", "xml")),
+    autoescape=select_autoescape(enabled_extensions=("html", "xml")),  # NOSONAR(python:S5247)
 )
 
 
