@@ -107,7 +107,7 @@ Semgrep understands code structure rather than just text. It uses abstract synta
 
 ### How it works
 
-1. Semgrep is installed as a Python package (`pip install semgrep`). The scanner locates it relative to the running Python interpreter.
+1. Semgrep is installed as a Python package (`uv sync --extra semgrep`). The scanner locates it relative to the running Python interpreter.
 2. It is invoked with `--json` output and `--exclude` flags for each directory in the exclusion list.
 3. The `extra.metadata.confidence` field is read if present (HIGH/MEDIUM/LOW); otherwise severity is used as a proxy.
 4. Results are post-filtered by the exclusion configuration before being returned.
@@ -117,7 +117,7 @@ Semgrep understands code structure rather than just text. It uses abstract synta
 - Language-aware: the same rule works across Python, JavaScript, Java, C#, Go, and many others
 - The `p/owasp-top-ten` ruleset adds a code-security layer beyond what secret scanners cover
 - Runs fully offline with community rulesets — no source code leaves the machine
-- pip-installable, no separate binary or container needed
+- pip-installable via `uv sync --extra semgrep`, no separate binary or container needed
 - Community rulesets are reviewed by Semgrep Inc.
 
 ### Alternatives considered

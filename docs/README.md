@@ -63,6 +63,7 @@ work without any extra infrastructure.  SonarQube is optional and adds deeper an
 |---|---|---|
 | **Windows 10 or 11 (64-bit)** | The tool runs on Windows, macOS, and Linux.  This guide uses Windows. | Already installed |
 | **Python 3.11 or newer** | The tool is written in Python | [python.org/downloads](https://www.python.org/downloads/) |
+| **uv** | Package manager | `pip install uv` |
 | **Git** (optional) | Only needed if you want to scan old commit history | [git-scm.com](https://git-scm.com/downloads) |
 | **Java 17 or newer** (optional) | Only needed for SonarQube — the most powerful scanner | [adoptium.net](https://adoptium.net/temurin/releases/) |
 | **Internet connection** | The first-time setup downloads tools automatically | — |
@@ -135,37 +136,32 @@ If you do not have Git installed, you can instead download a ZIP from the reposi
 
 ### Step 3 — Install Python packages
 
-**What this does:** Downloads the third-party libraries the tool depends on (things like the
-library that produces coloured terminal output, the YAML configuration reader, etc.).
+**What this does:** Downloads and installs all dependencies at their exact pinned versions, ensuring your environment matches what has been tested.
 
-In PowerShell, navigate into the project folder and run the install:
+First install `uv`, the package manager this project uses:
+
+```powershell
+pip install uv
+```
+
+Then install the project:
 
 ```powershell
 cd C:\Github\lap-pii-screener
-python -m pip install -r requirements.txt
+uv sync
 ```
 
-You will see a lot of text scroll past — that is normal.  Wait until you get a new `PS>` prompt.
+`uv sync` reads `uv.lock` to install every dependency at its exact pinned version, then registers the `sensitive-scanner` command. You will see a progress indicator, then a new `PS>` prompt.
 
-> **What is pip?** `pip` is Python's built-in package manager — like an app store for Python
-> libraries.  The `-r requirements.txt` part tells it to install everything listed in
-> the `requirements.txt` file.
+> **What is uv?** `uv` is a fast Python package manager. It uses `uv.lock` to ensure every install is byte-for-byte reproducible — the same versions every time, on every machine.
 
 ---
 
 ### Step 4 — Register the `sensitive-scanner` command
 
-**What this does:** Makes `sensitive-scanner` available as a command you can type from
-any folder, rather than having to be inside the project folder every time.
+**What this does:** Makes `sensitive-scanner` available as a command you can type from any folder.
 
-```powershell
-cd C:\Github\lap-pii-screener
-python -m pip install -e .
-```
-
-The `-e .` means "install this project in editable mode from the current folder (`.`)".
-
-Verify it worked:
+`uv sync` (run in Step 3) already installs the project in editable mode, so the command is registered automatically. Verify it worked:
 
 ```powershell
 sensitive-scanner --help
@@ -632,20 +628,11 @@ already logged in).
 
 ```powershell
 cd C:\Github\lap-pii-screener
-python -m pip install -e .
+pip install uv
+uv sync
 ```
 
-If that still does not work, the Python `Scripts` folder is probably not on your PATH.  Run:
-
-```powershell
-python -c "import sys; print(sys.executable)"
-```
-
-Note the folder shown (e.g. `C:\Users\YourName\AppData\Local\Python\pythoncore-3.14-64\`).
-The `Scripts` subfolder of that path needs to be on your PATH.  You can run the fix command
-from [Step 1](#step-1--install-python) above, substituting your actual Python version.
-
-Close and reopen PowerShell after running the fix.
+If that still does not work, the `uv`-managed virtual environment's `Scripts` folder may not be on your PATH. Check that `uv` completed without errors, then close and reopen PowerShell.
 
 ---
 
@@ -659,15 +646,15 @@ close and reopen PowerShell.
 
 ---
 
-### `pip install` fails with a permissions error
+### `uv sync` fails with a permissions error
 
 **Symptom:** Error message contains "Access is denied" or "Permission denied".
 
-**Fix:** Run PowerShell as Administrator, or add `--user` to the pip command:
+**Fix:** Run PowerShell as Administrator, or use a virtual environment inside the project folder:
 
 ```powershell
-python -m pip install --user -r requirements.txt
-python -m pip install --user -e .
+uv venv
+uv sync
 ```
 
 ---
@@ -679,10 +666,10 @@ import.
 
 **Cause:** The `semgrep` package has older dependencies that sometimes downgrade `mcp`.
 
-**Fix:**
+**Fix:** Re-sync from the lock file to restore pinned versions:
 
 ```powershell
-python -m pip install "mcp[cli]>=1.9.0" --upgrade
+uv sync
 ```
 
 ---
@@ -816,7 +803,8 @@ python -c "import sys; print(sys.executable)"
    installed in the Python environment VS Code is using.  Run:
 
 ```powershell
-"C:\path\to\your\python.exe" -m pip install -r C:\Github\lap-pii-screener\requirements.txt
+"C:\path\to\your\python.exe" -m pip install uv
+"C:\path\to\your\python.exe" -m uv sync --project C:\Github\lap-pii-screener
 ```
 
 Using the exact Python path from step 2 above.

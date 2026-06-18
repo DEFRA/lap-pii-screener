@@ -31,9 +31,11 @@ cd C:\Github\lap-pii-screener
 ## Step 2 — Install dependencies
 
 ```powershell
-python -m pip install -r requirements.txt
-python -m pip install -e .
+pip install uv
+uv sync
 ```
+
+`uv sync` reads `pyproject.toml` and `uv.lock` to install all dependencies at their exact pinned versions, then registers the `sensitive-scanner` command automatically.
 
 ---
 
