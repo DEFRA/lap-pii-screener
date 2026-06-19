@@ -92,4 +92,4 @@ For a detailed walkthrough including SonarQube setup and air-gapped environments
 
 ## Licence
 
-Internal use. See repository for licence details.
+Internal use.
