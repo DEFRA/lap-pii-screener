@@ -73,20 +73,41 @@ sensitive-scanner setup
 sensitive-scanner scan C:\path\to\your-project
 ```
 
-For a detailed walkthrough including SonarQube setup and air-gapped environments, see the [Setup Guide](docs/setup.md).
+For a detailed walkthrough including SonarQube setup and air-gapped environments, see the [Setup Guide](docs/setup/setup.md).
 
 ---
 
 ## Documentation
 
+**Setup**
+
 | Document | What it covers |
 |---|---|
-| [Setup Guide](docs/setup.md) | Full installation, SonarQube configuration, air-gapped environments |
-| [Scanning](docs/scanning.md) | All scan options, exclusions, suppressions, CI integration |
-| [Scanners](docs/scanners.md) | How each scanner works, regex rules, why each was chosen |
-| [Obfuscation](docs/obfuscation.md) | Interactive PII review, dry-run, apply, rollback, session files |
-| [Reports](docs/reports.md) | Report formats, what each contains, when to use each |
-| [Quick Start](docs/QUICKSTART.md) | Zero to scanning in 6 steps |
+| [Quick Start](docs/setup/QUICKSTART.md) | Zero to scanning in 6 steps |
+| [Setup Guide](docs/setup/setup.md) | Full installation, SonarQube configuration, air-gapped environments |
+
+**Guides**
+
+| Document | What it covers |
+|---|---|
+| [Scanning](docs/guides/scanning.md) | All scan options, exclusions, suppressions, CI integration |
+| [Obfuscation](docs/guides/obfuscation.md) | Interactive PII review, dry-run, apply, rollback, session files |
+| [Reports](docs/guides/reports.md) | Report formats, what each contains, when to use each |
+| [Agent (MCP)](docs/guides/agent.md) | Using the scanner from VS Code Copilot Chat |
+
+**Reference**
+
+| Document | What it covers |
+|---|---|
+| [Scanners](docs/reference/scanners.md) | How each scanner works, regex rules, why each was chosen |
+| [Ingestion support matrix](docs/reference/ingestion-requirements-support.html) | Supported file formats for PII ingestion |
+
+**Design**
+
+| Document | What it covers |
+|---|---|
+| [High-Level Design](docs/design/HIGH-LEVEL-DESIGN.md) | Architecture, data flow, component responsibilities |
+| [Low-Level Design](docs/design/LOW-LEVEL-DESIGN.md) | Class models, sequences, and lifecycle diagrams |
 
 ---
 

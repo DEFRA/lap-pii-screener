@@ -56,7 +56,7 @@ uv sync --extra semgrep
 
 ### 7. Optional — SonarQube
 
-Requires Java 17+ and the `sonar-scanner` CLI, or Docker Desktop. See [scanners.md](scanners.md) for full details.
+Requires Java 17+ and the `sonar-scanner` CLI, or Docker Desktop. See [scanners.md](../reference/scanners.md) for full details.
 
 ---
 

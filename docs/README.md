@@ -6,6 +6,17 @@
 
 ---
 
+## Documentation map
+
+The rest of the documentation is organised into folders:
+
+- **[setup/](setup/)** — [Quick Start](setup/QUICKSTART.md) and the full [Setup Guide](setup/setup.md).
+- **[guides/](guides/)** — [Scanning](guides/scanning.md), [Obfuscation](guides/obfuscation.md), [Reports](guides/reports.md), [Agent (MCP)](guides/agent.md).
+- **[reference/](reference/)** — [Scanners](reference/scanners.md) and the [ingestion support matrix](reference/ingestion-requirements-support.html).
+- **[design/](design/)** — [High-Level Design](design/HIGH-LEVEL-DESIGN.md) and [Low-Level Design](design/LOW-LEVEL-DESIGN.md).
+
+---
+
 ## What is this tool?
 
 This tool scans a folder of code and tells you if it contains anything sensitive that should not
