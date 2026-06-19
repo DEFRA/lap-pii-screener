@@ -151,6 +151,23 @@ async def run_scan(config: ScanConfig) -> Report:
     return report
 
 
+def _line_suppresses_finding(line_text: str, rule_id: str) -> bool:
+    """Return True if a noscan marker on *line_text* suppresses the given rule.
+
+    Bare ``noscan`` suppresses everything on the line; ``noscan: rule_id``
+    suppresses only the named rule.
+    """
+    if "noscan" not in line_text:
+        return False
+    colon_pos = line_text.find("noscan:")
+    if colon_pos != -1:
+        tail = line_text[colon_pos + 7:].split()
+        target_rule = tail[0].rstrip(".,;*/") if tail else ""
+        if target_rule and target_rule != rule_id.lower():
+            return False  # different rule — keep it
+    return True  # bare noscan or matched rule — suppress
+
+
 def _filter_inline_suppressions(findings: list[Finding], scan_root: str) -> list[Finding]:
     """
     Remove findings whose source line contains a noscan marker (case-insensitive).
@@ -179,16 +196,8 @@ def _filter_inline_suppressions(findings: list[Finding], scan_root: str) -> list
     for f in findings:
         lines = _lines(f.file)
         line_text = lines[f.line - 1].lower() if 0 < f.line <= len(lines) else ""
-        if "noscan" in line_text:
-            # Check for rule-specific form: noscan: rule_id
-            colon_pos = line_text.find("noscan:")
-            if colon_pos != -1:
-                # Only suppress if the rule_id matches
-                target_rule = line_text[colon_pos + 7:].split()[0].rstrip(".,;*/") if line_text[colon_pos + 7:].split() else ""
-                if target_rule and target_rule != f.rule_id.lower():
-                    kept.append(f)  # different rule — keep it
-                    continue
-            continue  # bare noscan or matched rule — suppress
+        if _line_suppresses_finding(line_text, f.rule_id):
+            continue
         kept.append(f)
     return kept
 

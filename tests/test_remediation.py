@@ -69,7 +69,7 @@ class TestResolve:
         assert rule is not None
 
     def test_hyphen_normalised_to_underscore_before_exact_match(self, engine: RemediationEngine) -> None:
-        category, _ = engine.resolve("pii-email")
+        category, rule = engine.resolve("pii-email")
 
         assert category == "pii_email"
         assert rule is not None

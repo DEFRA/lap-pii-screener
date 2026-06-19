@@ -111,6 +111,52 @@ def _render_source_context(
     console.print(ctx_text)
 
 
+def _decide_approve(item: "ReviewItem") -> None:
+    item.decision = "approved"
+
+
+def _decide_edit(item: "ReviewItem", console: "Console") -> None:
+    current = item.replacement
+    new_val = Prompt.ask(
+        f"  [bold]Custom replacement[/bold] (current: [green]{current}[/green])",
+        console=console,
+        default=current,
+    ).strip()
+    if new_val:
+        item.replacement = new_val
+    item.decision = "approved"
+
+
+def _decide_skip(item: "ReviewItem", console: "Console") -> None:
+    skip_reason = Prompt.ask(
+        r"  [bold]Skip reason[/bold] (optional \[press Enter to leave blank])",
+        console=console,
+        default="",
+    ).strip()
+    item.decision = "skipped"
+    item.skip_reason = _clean_skip_reason(skip_reason)
+
+
+def _decide_approve_all(item: "ReviewItem", session: "ReviewSession", console: "Console") -> None:
+    count = _apply_category_action(session, item.category, "approved")
+    item.decision = "approved"
+    console.print(f"  [dim]Approved all {count} pending '{item.category}' finding(s).[/dim]")
+
+
+def _decide_skip_all(item: "ReviewItem", session: "ReviewSession", console: "Console") -> None:
+    skip_reason = Prompt.ask(
+        f"  [bold]Skip reason for all '{item.category}'[/bold] "
+        r"(optional \[press Enter to leave blank])",
+        console=console,
+        default="",
+    ).strip()
+    skip_reason = _clean_skip_reason(skip_reason)
+    count = _apply_category_action(session, item.category, "skipped", skip_reason)
+    item.decision = "skipped"
+    item.skip_reason = skip_reason
+    console.print(f"  [dim]Skipped all {count} pending '{item.category}' finding(s).[/dim]")
+
+
 def _prompt_decision(
     item: "ReviewItem",
     session: "ReviewSession",
@@ -121,6 +167,13 @@ def _prompt_decision(
     Prompt the user for a decision on *item*.
     Returns None to continue, or the session if the user quits.
     """
+    handlers = {
+        "a": lambda: _decide_approve(item),
+        "e": lambda: _decide_edit(item, console),
+        "s": lambda: _decide_skip(item, console),
+        "A": lambda: _decide_approve_all(item, session, console),
+        "S": lambda: _decide_skip_all(item, session, console),
+    }
     while True:
         choice = Prompt.ask(
             r"  [bold]Decision[/bold] (\[a]pprove / \[e]dit+approve / \[s]kip / \[A]ll-approve / \[S]kip-all / \[q]uit)",
@@ -128,46 +181,9 @@ def _prompt_decision(
             default="s",
         ).strip()
 
-        if choice == "a":
-            item.decision = "approved"
-            return None
-        if choice == "e":
-            current = item.replacement
-            new_val = Prompt.ask(
-                f"  [bold]Custom replacement[/bold] (current: [green]{current}[/green])",
-                console=console,
-                default=current,
-            ).strip()
-            if new_val:
-                item.replacement = new_val
-            item.decision = "approved"
-            return None
-        if choice == "s":
-            skip_reason = Prompt.ask(
-                r"  [bold]Skip reason[/bold] (optional \[press Enter to leave blank])",
-                console=console,
-                default="",
-            ).strip()
-            item.decision = "skipped"
-            item.skip_reason = _clean_skip_reason(skip_reason)
-            return None
-        if choice == "A":
-            count = _apply_category_action(session, item.category, "approved")
-            item.decision = "approved"
-            console.print(f"  [dim]Approved all {count} pending '{item.category}' finding(s).[/dim]")
-            return None
-        if choice == "S":
-            skip_reason = Prompt.ask(
-                f"  [bold]Skip reason for all '{item.category}'[/bold] "
-                r"(optional \[press Enter to leave blank])",
-                console=console,
-                default="",
-            ).strip()
-            skip_reason = _clean_skip_reason(skip_reason)
-            count = _apply_category_action(session, item.category, "skipped", skip_reason)
-            item.decision = "skipped"
-            item.skip_reason = skip_reason
-            console.print(f"  [dim]Skipped all {count} pending '{item.category}' finding(s).[/dim]")
+        handler = handlers.get(choice)
+        if handler is not None:
+            handler()
             return None
         if choice == "q":
             if session_path:
@@ -175,6 +191,32 @@ def _prompt_decision(
             console.print("\n[dim]Review paused — re-run with --apply-session to resume.[/dim]")
             return session
         console.print("  [red]Invalid choice — enter a, e, s, A, S, or q.[/red]")
+
+
+def _auto_approve_by_severity(
+    session: ReviewSession,
+    auto_approve_severity: str,
+    session_path: Optional[Path],
+    console: Console,
+) -> None:
+    """Auto-approve pending, obfuscatable items at or above a severity threshold."""
+    threshold = _SEV_RANK.get(auto_approve_severity.lower(), -1)
+    auto_count = 0
+    for item in session.items:
+        if (
+            item.decision == "pending"
+            and item.obfuscatable
+            and _SEV_RANK.get(item.severity.lower(), 0) >= threshold
+        ):
+            item.decision = "approved"
+            auto_count += 1
+    if auto_count:
+        console.print(
+            f"[dim]Auto-approved {auto_count} finding(s) at or above "
+            f"'{auto_approve_severity}'.[/dim]"
+        )
+    if session_path:
+        session.save(session_path)
 
 
 def run_review(
@@ -199,23 +241,7 @@ def run_review(
 
     # ── Auto-approve by severity ──────────────────────────────────────────────
     if auto_approve_severity:
-        threshold = _SEV_RANK.get(auto_approve_severity.lower(), -1)
-        auto_count = 0
-        for item in session.items:
-            if (
-                item.decision == "pending"
-                and item.obfuscatable
-                and _SEV_RANK.get(item.severity.lower(), 0) >= threshold
-            ):
-                item.decision = "approved"
-                auto_count += 1
-        if auto_count:
-            console.print(
-                f"[dim]Auto-approved {auto_count} finding(s) at or above "
-                f"'{auto_approve_severity}'.[/dim]"
-            )
-        if session_path:
-            session.save(session_path)
+        _auto_approve_by_severity(session, auto_approve_severity, session_path, console)
 
     pending = [i for i in session.items if i.decision == "pending"]
     if not pending:

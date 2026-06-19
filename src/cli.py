@@ -173,6 +173,47 @@ def _load_suppress_config(
     return persistent, by_scanner
 
 
+def _is_pattern(s: str) -> bool:
+    return any(c in s for c in ("*", "?", "[", "/", "\\"))
+
+
+def _classify_exclusion(entry: str) -> tuple[str, str]:
+    """Return (kind, normalised_entry) where kind is 'pattern' | 'file' | 'dir'."""
+    entry = entry.replace("\\", "/")
+    if _is_pattern(entry):
+        return "pattern", entry
+    if "." in entry.split("/")[-1] and "/" not in entry:
+        return "file", entry
+    return "dir", entry
+
+
+def _excludes_from_config(cfg: dict) -> tuple[list[str], list[str], list[str]]:
+    """Return (dirs, patterns, files) declared in the config's `exclude` block."""
+    dirs: list[str] = []
+    patterns: list[str] = []
+    files: list[str] = []
+    cfg_exc = cfg.get("exclude", {})
+    if isinstance(cfg_exc, dict):
+        dirs.extend(str(d) for d in cfg_exc.get("directories", []))
+        patterns.extend(str(p).replace("\\", "/") for p in cfg_exc.get("patterns", []))
+        files.extend(str(fi).replace("\\", "/") for fi in cfg_exc.get("files", []))
+    return dirs, patterns, files
+
+
+def _report_artifact_excludes(target: Path) -> list[str]:
+    """Return previously-generated report files in *target* so they are not rescanned."""
+    _REPORT_SUFFIXES = {".html", ".json", ".md"}
+    _REPORT_STEMS = {"combined_pii_report", "pii_report", "scan_report", "sensitive_scan_report", "report"}
+    out: list[str] = []
+    for p in target.iterdir():
+        if p.is_file() and p.suffix.lower() in _REPORT_SUFFIXES and p.stem.lower() in _REPORT_STEMS:
+            try:
+                out.append(str(p.relative_to(target)))
+            except ValueError:
+                pass
+    return out
+
+
 def _collect_exclusion_lists(
     target: Path,
     cfg: dict,
@@ -180,30 +221,12 @@ def _collect_exclusion_lists(
     output: Optional[Path],
 ) -> tuple[list[str], list[str], list[str]]:
     """Build (extra_dir_excludes, extra_patterns, excluded_files) from config and flags."""
-    extra_dir_excludes: list[str] = []
-    extra_patterns: list[str] = []
-    excluded_files: list[str] = []
-
-    def _is_pattern(s: str) -> bool:
-        return any(c in s for c in ("*", "?", "[", "/", "\\"))
+    extra_dir_excludes, extra_patterns, excluded_files = _excludes_from_config(cfg)
+    _buckets = {"dir": extra_dir_excludes, "pattern": extra_patterns, "file": excluded_files}
 
     def _add_entry(entry: str) -> None:
-        entry = entry.replace("\\", "/")
-        if _is_pattern(entry):
-            extra_patterns.append(entry)
-        elif "." in entry.split("/")[-1] and "/" not in entry:
-            excluded_files.append(entry)
-        else:
-            extra_dir_excludes.append(entry)
-
-    cfg_exc = cfg.get("exclude", {})
-    if isinstance(cfg_exc, dict):
-        for d in cfg_exc.get("directories", []):
-            extra_dir_excludes.append(str(d))
-        for p in cfg_exc.get("patterns", []):
-            extra_patterns.append(str(p).replace("\\", "/"))
-        for fi in cfg_exc.get("files", []):
-            excluded_files.append(str(fi).replace("\\", "/"))
+        kind, value = _classify_exclusion(entry)
+        _buckets[kind].append(value)
 
     ignore_file = target / ".scannerignore"
     if ignore_file.exists():
@@ -226,22 +249,103 @@ def _collect_exclusion_lists(
         except ValueError:
             pass
 
-    _REPORT_SUFFIXES = {".html", ".json", ".md"}
-    _REPORT_STEMS = {"combined_pii_report", "pii_report", "scan_report", "sensitive_scan_report", "report"}
-    for p in target.iterdir():
-        if p.is_file() and p.suffix.lower() in _REPORT_SUFFIXES and p.stem.lower() in _REPORT_STEMS:
-            try:
-                excluded_files.append(str(p.relative_to(target)))
-            except ValueError:
-                pass
+    excluded_files.extend(_report_artifact_excludes(target))
 
     return extra_dir_excludes, extra_patterns, excluded_files
+
+
+def _parse_scanner_list(raw) -> list[str]:
+    """Normalise a scanners value (list or comma-string) to lowercase names."""
+    if isinstance(raw, list):
+        return [s.strip().lower() for s in raw]
+    return [s.strip().lower() for s in str(raw).split(",")]
+
+
+def _join_suppress_value(raw) -> str:
+    """Normalise a suppress config value (list or string) to a comma-string."""
+    return ",".join(raw) if isinstance(raw, list) else str(raw)
+
+
+def _cfg_default(cli_value, cli_is_unset: bool, cfg_value, transform=lambda x: x):
+    """Return the CLI value, or the (transformed) config value when the CLI value is unset."""
+    return transform(cfg_value) if (cli_is_unset and cfg_value) else cli_value
+
+
+def _print_scan_summary(report) -> None:
+    s = report.summary
+    _console.print(
+        f"\n[bold]Scan complete[/bold] — "
+        f"Total: [bold]{s.total}[/bold]  "
+        f"[bold red]Critical: {s.critical}[/bold red]  "
+        f"[bold dark_orange]High: {s.high}[/bold dark_orange]  "
+        f"[bold yellow]Medium: {s.medium}[/bold yellow]  "
+        f"[bold cyan]Low: {s.low}[/bold cyan]"
+    )
+
+
+def _apply_cli_suppression(report, suppress, persistent: set[str]) -> None:
+    """Filter findings by the combined CLI/persistent suppression set (in place)."""
+    suppress_set = {r.strip() for r in suppress.split(",") if r.strip()} if suppress else set()
+    suppress_set |= persistent
+    if not suppress_set:
+        return
+    before = len(report.findings)
+    report.findings = suppress_findings(report.findings, suppress_set)
+    report.build_summary()
+    dropped = before - len(report.findings)
+    if dropped:
+        _console.print(f"[dim]Suppressed {dropped} finding(s) matching: {', '.join(sorted(suppress_set))}[/dim]")
+
+
+def _emit_html_with_session(report, output, session_file, show_confidence) -> None:
+    """Render the HTML report enriched with an obfuscation review session."""
+    from obfuscation.session import ReviewSession as _ReviewSession
+    if not session_file.exists():
+        _console.print(f"[bold red]Session file not found:[/bold red] {session_file}")
+        raise typer.Exit(code=1)
+    _session = _ReviewSession.load(session_file)
+    content = render_html(report, session=_session, show_confidence=show_confidence)
+    if output:
+        output.write_text(content, encoding="utf-8")
+        _console.print(f"\n[bold green]Report saved to[/bold green] {output.resolve()}")
+    else:
+        print(content)
+
+
+def _emit_scan_report(report, fmt, output, per_file, output_dir, session_file, show_confidence) -> None:
+    """Render and write the scan report according to the chosen output mode."""
+    if per_file or output_dir is not None:
+        _dir = output_dir or Path("scan-reports")
+        written = _render_and_write_per_file(report, fmt, _dir)
+        if written:
+            _console.print(
+                f"\n[bold green]Per-file reports written:[/bold green] "
+                f"{written} file(s) → {_dir.resolve()}"
+            )
+        else:
+            _console.print("\n[dim]No findings — no per-file reports written.[/dim]")
+        return
+    if fmt == "html" and session_file is not None:
+        _emit_html_with_session(report, output, session_file, show_confidence)
+        return
+    _render_and_write(report, fmt, output)
+
+
+def _apply_fail_on(report, fail_on) -> None:
+    """Exit with code 2 if any finding meets or exceeds the --fail-on severity."""
+    if not fail_on:
+        return
+    severity_rank = {"critical": 4, "high": 3, "medium": 2, "low": 1}
+    threshold = severity_rank.get(fail_on.lower(), 0)
+    worst = max((severity_rank.get(f.severity, 0) for f in report.findings), default=0)
+    if worst >= threshold:
+        raise typer.Exit(code=2)
 
 
 # ── Commands ──────────────────────────────────────────────────────────────────
 
 @app.command()
-def scan(
+def scan(  # NOSONAR - CLI entry point; each parameter is a distinct user-facing option
     path: Path = typer.Argument(
         ...,
         help="Directory to scan.",
@@ -355,7 +459,7 @@ def scan(
     # Parse scanners
     scanner_list: list[str] | None = None
     if scanners:
-        scanner_list = [s.strip().lower() for s in scanners.split(",")]
+        scanner_list = _parse_scanner_list(scanners)
         unknown = set(scanner_list) - _VALID_SCANNERS
         if unknown:
             _console.print(f"[bold red]Unknown scanner(s):[/bold red] {', '.join(unknown)}")
@@ -371,26 +475,16 @@ def scan(
 
     _cfg = _load_yaml_config(config_file, target)
 
-    # Merge config file values — CLI flags take precedence (None = not supplied)
-    if scanners is None and _cfg.get("scanners"):
-        scanners = ",".join(_cfg["scanners"]) if isinstance(_cfg["scanners"], list) else str(_cfg["scanners"])
-    if fmt == "console" and _cfg.get("format"):
-        fmt = _cfg["format"]
-    if output is None and _cfg.get("output"):
-        output = Path(_cfg["output"])
-    if project_name is None and _cfg.get("project_name"):
-        project_name = _cfg["project_name"]
-    if not history and _cfg.get("include_git_history"):
-        history = bool(_cfg["include_git_history"])
-    if fail_on is None and _cfg.get("fail_on"):
-        fail_on = _cfg["fail_on"]
-    if not show_secrets and _cfg.get("show_secrets"):
-        show_secrets = bool(_cfg["show_secrets"])
-    if not skip_comments and _cfg.get("skip_comments"):
-        skip_comments = bool(_cfg["skip_comments"])
-    if suppress is None and _cfg.get("suppress"):
-        _sup = _cfg["suppress"]
-        suppress = ",".join(_sup) if isinstance(_sup, list) else str(_sup)
+    # Merge config file values — CLI flags take precedence (unset = not supplied)
+    scanner_list = _cfg_default(scanner_list, scanner_list is None, _cfg.get("scanners"), _parse_scanner_list)
+    fmt = _cfg_default(fmt, fmt == "console", _cfg.get("format"))
+    output = _cfg_default(output, output is None, _cfg.get("output"), Path)
+    project_name = _cfg_default(project_name, project_name is None, _cfg.get("project_name"))
+    history = _cfg_default(history, not history, _cfg.get("include_git_history"), bool)
+    fail_on = _cfg_default(fail_on, fail_on is None, _cfg.get("fail_on"))
+    show_secrets = _cfg_default(show_secrets, not show_secrets, _cfg.get("show_secrets"), bool)
+    skip_comments = _cfg_default(skip_comments, not skip_comments, _cfg.get("skip_comments"), bool)
+    suppress = _cfg_default(suppress, suppress is None, _cfg.get("suppress"), _join_suppress_value)
 
     _persistent_suppress, _suppress_by_scanner = _load_suppress_config(target, _cfg)
     extra_dir_excludes, extra_patterns, excluded_files = _collect_exclusion_lists(
@@ -420,140 +514,98 @@ def scan(
         progress.add_task(f"Scanning [cyan]{target}[/cyan]...", total=None)
         report = asyncio.run(run_scan(config))
 
-    s = report.summary
-    _console.print(
-        f"\n[bold]Scan complete[/bold] — "
-        f"Total: [bold]{s.total}[/bold]  "
-        f"[bold red]Critical: {s.critical}[/bold red]  "
-        f"[bold dark_orange]High: {s.high}[/bold dark_orange]  "
-        f"[bold yellow]Medium: {s.medium}[/bold yellow]  "
-        f"[bold cyan]Low: {s.low}[/bold cyan]"
-    )
-
-    suppress_set = {r.strip() for r in suppress.split(",") if r.strip()} if suppress else set()
-    suppress_set |= _persistent_suppress
-
-    if suppress_set:
-        before = len(report.findings)
-        report.findings = suppress_findings(report.findings, suppress_set)
-        report.build_summary()
-        dropped = before - len(report.findings)
-        if dropped:
-            _console.print(f"[dim]Suppressed {dropped} finding(s) matching: {', '.join(sorted(suppress_set))}[/dim]")
-
-    if per_file or output_dir is not None:
-        _dir = output_dir or Path("scan-reports")
-        written = _render_and_write_per_file(report, fmt, _dir)
-        if written:
-            _console.print(
-                f"\n[bold green]Per-file reports written:[/bold green] "
-                f"{written} file(s) → {_dir.resolve()}"
-            )
-        else:
-            _console.print("\n[dim]No findings — no per-file reports written.[/dim]")
-    elif fmt == "html" and session_file is not None:
-        from obfuscation.session import ReviewSession as _ReviewSession
-        if not session_file.exists():
-            _console.print(
-                f"[bold red]Session file not found:[/bold red] {session_file}"
-            )
-            raise typer.Exit(code=1)
-        _session = _ReviewSession.load(session_file)
-        content = render_html(report, session=_session, show_confidence=show_confidence)
-        if output:
-            output.write_text(content, encoding="utf-8")
-            _console.print(f"\n[bold green]Report saved to[/bold green] {output.resolve()}")
-        else:
-            print(content)
-    else:
-        _render_and_write(report, fmt, output)
-
-    # --fail-on exit code
-    if fail_on:
-        severity_rank = {"critical": 4, "high": 3, "medium": 2, "low": 1}
-        threshold = severity_rank.get(fail_on.lower(), 0)
-        worst = max(
-            (severity_rank.get(f.severity, 0) for f in report.findings),
-            default=0,
-        )
-        if worst >= threshold:
-            raise typer.Exit(code=2)
+    _print_scan_summary(report)
+    _apply_cli_suppression(report, suppress, _persistent_suppress)
+    _emit_scan_report(report, fmt, output, per_file, output_dir, session_file, show_confidence)
+    _apply_fail_on(report, fail_on)
 
 
-@app.command()
-def status() -> None:
-    """Show which scanner backends are available and the active tier."""
-    import os
+def _status_binary_lines() -> list[str]:
+    """Status lines for the managed scanner binaries (gitleaks etc.)."""
     from scanners.binary_manager import SPECS, is_installed
-    from scanners.constants import detect_container_runtime
-    from scanners.sonarqube_scanner import (
-        SonarQubeScanner,
-        _find_native_sonarqube,
-        _find_sonar_scanner,
-    )
-
     lines: list[str] = []
-
-    # Managed binaries
     for name in SPECS:
         ok = is_installed(name)
         mark = "✅" if ok else "⬇ "
         note = "" if ok else "  (auto-downloaded on first scan)"
         lines.append(f"  {mark} {name}{note}")
+    return lines
 
-    # Semgrep (pip-installed)
+
+def _status_semgrep_line() -> str:
     import shutil
     semgrep = shutil.which("semgrep")
     if semgrep:
-        lines.append(f"  ✅ semgrep  {semgrep}")
-    else:
-        lines.append("  ❌ semgrep  not found — run: pip install semgrep")
+        return f"  ✅ semgrep  {semgrep}"
+    return "  ❌ semgrep  not found — run: pip install semgrep"
 
-    # Java + native SonarQube
-    sq_home = _find_native_sonarqube()
-    java = shutil.which("java")
-    lines.append("")
+
+def _status_sonarqube_lines(sq_home, java) -> list[str]:
+    from scanners.sonarqube_scanner import _find_sonar_scanner
     if sq_home and java:
-        lines.append(f"  ✅ SonarQube (native)  {sq_home}")
         sc = _find_sonar_scanner()
-        lines.append(f"  {'✅' if sc else '⚠ '} sonar-scanner  {sc or 'not found'}")
-    elif sq_home:
-        lines.append(f"  ⚠  SonarQube found at {sq_home} but Java not on PATH")
-    else:
-        lines.append("  ℹ  SonarQube (native)  not installed")
+        return [
+            f"  ✅ SonarQube (native)  {sq_home}",
+            f"  {'✅' if sc else '⚠ '} sonar-scanner  {sc or 'not found'}",
+        ]
+    if sq_home:
+        return [f"  ⚠  SonarQube found at {sq_home} but Java not on PATH"]
+    return ["  ℹ  SonarQube (native)  not installed"]
 
-    # Container runtime
-    runtime = detect_container_runtime()
-    if runtime:
-        lines.append(f"  ✅ container runtime  {runtime}")
-    else:
-        lines.append("  ℹ  Docker / Podman  not found")
 
-    # spaCy
+def _status_spacy_line() -> str:
     try:
         import spacy  # type: ignore
-        try:
-            spacy.load("en_core_web_sm")
-            lines.append("  ✅ spaCy NLP  en_core_web_sm loaded")
-        except OSError:
-            lines.append("  ⚠  spaCy installed but model missing — run: python -m spacy download en_core_web_sm")
     except ImportError:
-        lines.append("  ℹ  spaCy NLP  not installed (optional — pip install spacy)")
+        return "  ℹ  spaCy NLP  not installed (optional — pip install spacy)"
+    try:
+        spacy.load("en_core_web_sm")
+        return "  ✅ spaCy NLP  en_core_web_sm loaded"
+    except OSError:
+        return "  ⚠  spaCy installed but model missing — run: python -m spacy download en_core_web_sm"
 
-    # Presidio
+
+def _status_presidio_line() -> str:
     try:
         from presidio_analyzer import AnalyzerEngine  # type: ignore  # noqa: F401
-        lines.append("  ✅ Presidio NER  installed (best name/entity detection)")
+        return "  ✅ Presidio NER  installed (best name/entity detection)"
     except ImportError:
-        lines.append("  ℹ  Presidio NER  not installed (optional — pip install presidio-analyzer presidio-anonymizer)")
+        return "  ℹ  Presidio NER  not installed (optional — pip install presidio-analyzer presidio-anonymizer)"
 
-    # Tier
-    tier = 1
-    if (sq_home and java) or runtime:
-        tier = 2
+
+def _status_nlp_lines() -> list[str]:
+    return [_status_spacy_line(), _status_presidio_line()]
+
+
+def _compute_tier(sq_home, java, runtime) -> int:
+    import os
     if os.environ.get("SONAR_TOKEN") and "sonarcloud.io" in os.environ.get("SONAR_HOST_URL", ""):
-        tier = 3
+        return 3
+    if (sq_home and java) or runtime:
+        return 2
+    return 1
 
+
+@app.command()
+def status() -> None:
+    """Show which scanner backends are available and the active tier."""
+    import shutil
+    from scanners.constants import detect_container_runtime
+    from scanners.sonarqube_scanner import _find_native_sonarqube
+
+    sq_home = _find_native_sonarqube()
+    java = shutil.which("java")
+    runtime = detect_container_runtime()
+
+    lines: list[str] = []
+    lines.extend(_status_binary_lines())
+    lines.append(_status_semgrep_line())
+    lines.append("")
+    lines.extend(_status_sonarqube_lines(sq_home, java))
+    lines.append(f"  ✅ container runtime  {runtime}" if runtime else "  ℹ  Docker / Podman  not found")
+    lines.extend(_status_nlp_lines())
+
+    tier = _compute_tier(sq_home, java, runtime)
     tier_labels = {
         1: "Gitleaks + Semgrep + PII scanner (no infrastructure required)",
         2: "Tier 1 + SonarQube",
@@ -626,80 +678,221 @@ def _run_semgrep_setup(check: bool, results: list) -> None:
             results.append(("Semgrep", _SR_FAIL, str(exc)))
 
 
-def _run_spacy_setup(check: bool, do_spacy: bool, results: list) -> None:
-    """Append spaCy status row(s) to *results*."""
+def _spacy_report_existing(results: list) -> None:
+    """Report spaCy status without installing (the --spacy flag was not given)."""
+    try:
+        import spacy as _spacy  # type: ignore
+    except ImportError:
+        results.append(("spaCy", _SR_SKIP, "optional — add --spacy to install"))
+        return
+    try:
+        _spacy.load("en_core_web_sm")
+        results.append(("spaCy", _SR_OK, "en_core_web_sm ready"))
+    except OSError:
+        results.append(("spaCy", _SR_WARN, "model missing — run: sensitive-scanner setup --spacy"))
+
+
+def _ensure_spacy_installed(check: bool, results: list) -> bool:
+    """Ensure the spaCy package is importable; pip-install it if needed. Returns availability."""
     import subprocess
     import sys as _sys
     from rich.status import Status
 
-    if not do_spacy:
-        try:
-            import spacy as _spacy  # type: ignore
-            try:
-                _spacy.load("en_core_web_sm")
-                results.append(("spaCy", _SR_OK, "en_core_web_sm ready"))
-            except OSError:
-                results.append(("spaCy", _SR_WARN, "model missing — run: sensitive-scanner setup --spacy"))
-        except ImportError:
-            results.append(("spaCy", _SR_SKIP, "optional — add --spacy to install"))
-        return
-
-    spacy_ok = False
     try:
-        import spacy as _spacy  # type: ignore
-        spacy_ok = True
+        import spacy  # type: ignore  # noqa: F401
+        return True
     except ImportError:
-        if check:
-            results.append(("spaCy", _SR_WARN, "not installed — run: pip install spacy"))
-        else:
-            with Status("Installing spaCy via pip...", console=_console):
-                try:
-                    r = subprocess.run(
-                        [_sys.executable, "-m", "pip", "install", "--quiet", "spacy"],
-                        capture_output=True, text=True, timeout=300,
-                    )
-                    spacy_ok = r.returncode == 0
-                    if not spacy_ok:
-                        results.append(("spaCy", _SR_FAIL, "pip install failed"))
-                except Exception as exc:
-                    results.append(("spaCy", _SR_FAIL, str(exc)))
+        pass
 
-    if not spacy_ok:
-        return
+    if check:
+        results.append(("spaCy", _SR_WARN, "not installed — run: pip install spacy"))
+        return False
+
+    with Status("Installing spaCy via pip...", console=_console):
+        try:
+            r = subprocess.run(
+                [_sys.executable, "-m", "pip", "install", "--quiet", "spacy"],
+                capture_output=True, text=True, timeout=300,
+            )
+        except Exception as exc:
+            results.append(("spaCy", _SR_FAIL, str(exc)))
+            return False
+
+    if r.returncode != 0:
+        results.append(("spaCy", _SR_FAIL, "pip install failed"))
+        return False
+    return True
+
+
+def _ensure_spacy_model(check: bool, results: list) -> None:
+    """Ensure the en_core_web_sm model is present; download it if needed."""
+    import subprocess
+    import sys as _sys
+    from rich.status import Status
 
     try:
         import spacy as _spacy  # type: ignore
         _spacy.load("en_core_web_sm")
         results.append(("spaCy", _SR_OK, "en_core_web_sm ready"))
+        return
     except OSError:
-        if check:
-            results.append(("spaCy", _SR_WARN, "installed but en_core_web_sm model missing"))
+        pass
+
+    if check:
+        results.append(("spaCy", _SR_WARN, "installed but en_core_web_sm model missing"))
+        return
+
+    with Status("Downloading en_core_web_sm model...", console=_console):
+        try:
+            r = subprocess.run(
+                [_sys.executable, "-m", "spacy", "download", "en_core_web_sm"],
+                capture_output=True, text=True, timeout=300,
+            )
+        except Exception as exc:
+            results.append(("spaCy", _SR_FAIL, str(exc)))
             return
-        with Status("Downloading en_core_web_sm model...", console=_console):
-            try:
-                r = subprocess.run(
-                    [_sys.executable, "-m", "spacy", "download", "en_core_web_sm"],
-                    capture_output=True, text=True, timeout=300,
-                )
-                if r.returncode == 0:
-                    results.append(("spaCy", _SR_OK, "en_core_web_sm downloaded"))
-                else:
-                    results.append(("spaCy", _SR_FAIL, "model download failed"))
-            except Exception as exc:
-                results.append(("spaCy", _SR_FAIL, str(exc)))
+
+    if r.returncode == 0:
+        results.append(("spaCy", _SR_OK, "en_core_web_sm downloaded"))
+    else:
+        results.append(("spaCy", _SR_FAIL, "model download failed"))
+
+
+def _run_spacy_setup(check: bool, do_spacy: bool, results: list) -> None:
+    """Append spaCy status row(s) to *results*."""
+    if not do_spacy:
+        _spacy_report_existing(results)
+        return
+    if not _ensure_spacy_installed(check, results):
+        return
+    _ensure_spacy_model(check, results)
+
+
+def _setup_sonar_scanner_cli(check: bool, results: list) -> None:
+    """Install (or report) the sonar-scanner-cli."""
+    from rich.status import Status
+    from scanners.sonarqube_manager import ensure_sonar_scanner, sonar_scanner_installed, _SCANNER_DIR
+
+    if sonar_scanner_installed():
+        results.append(("sonar-scanner-cli", _SR_OK, f"{_SCANNER_DIR}"))
+        return
+    if check:
+        results.append(("sonar-scanner-cli", _SR_WARN, "not installed"))
+        return
+    with Status("Downloading sonar-scanner-cli...", console=_console):
+        try:
+            path = asyncio.run(ensure_sonar_scanner())
+        except Exception as exc:
+            results.append(("sonar-scanner-cli", _SR_FAIL, str(exc)))
+            return
+    if path:
+        results.append(("sonar-scanner-cli", _SR_OK, f"installed → {path}"))
+    else:
+        results.append(("sonar-scanner-cli", _SR_FAIL, "download failed"))
+
+
+def _setup_sonarqube_ce(check: bool, non_interactive: bool, results: list) -> None:
+    """Download (or report) SonarQube Community Edition."""
+    from rich.status import Status
+    from scanners.sonarqube_manager import SONAR_PORT, ensure_sonarqube, patch_sonar_port, _SQ_DIR
+    from scanners.sonarqube_scanner import _find_native_sonarqube
+
+    sq_home = _find_native_sonarqube()
+    if sq_home:
+        if not check:
+            patch_sonar_port(sq_home)
+        results.append((_LABEL_SONARQUBE_CE, _SR_OK, f"port {SONAR_PORT} — {sq_home}"))
+        return
+    if check:
+        results.append((_LABEL_SONARQUBE_CE, _SR_WARN, "not installed"))
+        return
+    if not non_interactive:
+        _console.print(f"\n  [dim]SonarQube CE is ~500 MB.  Downloading to {_SQ_DIR}[/dim]")
+    with Status("Downloading SonarQube CE (~500 MB, this may take a few minutes)...", console=_console):
+        try:
+            path = asyncio.run(ensure_sonarqube())
+        except Exception as exc:
+            results.append((_LABEL_SONARQUBE_CE, _SR_FAIL, str(exc)))
+            return
+    if path:
+        results.append((_LABEL_SONARQUBE_CE, _SR_OK, f"port {SONAR_PORT} — {path}"))
+    else:
+        results.append((_LABEL_SONARQUBE_CE, _SR_FAIL, "download failed — check internet connection"))
+
+
+def _persist_sonar_token(host_url: str, token: str, results: list) -> None:
+    """Persist the generated admin token + host URL and print guidance."""
+    from scanners.sonarqube_manager import persist_env_var
+    tok_ok = persist_env_var("SONAR_TOKEN", token)
+    url_ok = persist_env_var("SONAR_HOST_URL", host_url)
+    env_note = "saved to user environment" if (tok_ok and url_ok) else "shown below — save manually"
+    results.append(("Admin token", _SR_OK, env_note))
+    results.append(("SONAR_HOST_URL", _SR_OK, host_url))
+    _console.print(
+        "\n  [bold green]✔ SONAR_TOKEN[/bold green] and "
+        "[bold green]SONAR_HOST_URL[/bold green] have been written "
+        "to your user environment automatically."
+    )
+    _console.print("  Open a [bold]new[/bold] terminal window for them to take effect in future sessions.")
+    _console.print(f"\n  [dim]SONAR_TOKEN=[/dim][bold]{token}[/bold]")
+    _console.print(f"  [dim](Change the admin password at {host_url} when convenient.)[/dim]")
+
+
+def _setup_sonarqube_token(host_url: str, results: list) -> None:
+    """Generate and persist an admin token (or print manual instructions)."""
+    from scanners.sonarqube_manager import ensure_admin_token, persist_env_var
+    try:
+        token, token_reason = asyncio.run(ensure_admin_token(host_url))
+    except Exception as exc:
+        token, token_reason = None, str(exc)
+
+    if token:
+        _persist_sonar_token(host_url, token, results)
+        return
+
+    results.append(("Admin token", _SR_WARN, token_reason))
+    persist_env_var("SONAR_HOST_URL", host_url)
+    results.append(("SONAR_HOST_URL", _SR_OK, f"{host_url} — saved to user environment"))
+    _console.print(f"\n  Generate a token at: [link]{host_url}/account/security[/link]")
+    _console.print(
+        "  Then run:\n"
+        "  [bold]sensitive-scanner setup --sonarqube[/bold]\n"
+        "  — or set it manually in a new terminal:\n"
+        '  [dim][Environment]::SetEnvironmentVariable("SONAR_TOKEN", "<your-token>", "User")[/dim]'
+    )
+
+
+def _setup_sonarqube_start(check: bool, results: list) -> None:
+    """Start SonarQube and provision an admin token."""
+    from scanners.sonarqube_manager import SONAR_PORT, start_and_wait
+    from scanners.sonarqube_scanner import _find_native_sonarqube
+
+    sq_home = _find_native_sonarqube()
+    if not sq_home or check:
+        return
+
+    _console.print(f"\n  Starting SonarQube on port {SONAR_PORT} (first start can take ~2 min)...")
+    host_url = f"http://localhost:{SONAR_PORT}"
+    try:
+        up = asyncio.run(start_and_wait(sq_home, port=SONAR_PORT, max_wait=180))
+    except Exception as exc:
+        results.append((_LABEL_SONARQUBE_START, _SR_FAIL, str(exc)))
+        return
+
+    if not up:
+        results.append((_LABEL_SONARQUBE_START, _SR_WARN, "did not become UP within 3 min — try starting manually"))
+        return
+
+    results.append((_LABEL_SONARQUBE_START, _SR_OK, f"running at {host_url}"))
+    _setup_sonarqube_token(host_url, results)
 
 
 def _run_sonarqube_setup(
     check: bool, do_sonarqube: bool, non_interactive: bool, results: list
 ) -> None:
     """Append SonarQube status row(s) to *results*."""
-    from scanners.sonarqube_manager import (
-        SONAR_PORT, check_java, ensure_sonar_scanner, ensure_sonarqube,
-        ensure_admin_token, persist_env_var, sonar_scanner_installed,
-        start_and_wait, _SQ_DIR, _SCANNER_DIR,
-    )
+    from scanners.sonarqube_manager import check_java
     from scanners.sonarqube_scanner import _find_native_sonarqube
-    from rich.status import Status
 
     if not do_sonarqube:
         sq_home = _find_native_sonarqube()
@@ -718,89 +911,9 @@ def _run_sonarqube_setup(
 
     results.append(("Java 17+", _SR_OK, java_msg))
 
-    if sonar_scanner_installed():
-        results.append(("sonar-scanner-cli", _SR_OK, f"{_SCANNER_DIR}"))
-    elif check:
-        results.append(("sonar-scanner-cli", _SR_WARN, "not installed"))
-    else:
-        with Status("Downloading sonar-scanner-cli...", console=_console):
-            try:
-                path = asyncio.run(ensure_sonar_scanner())
-                if path:
-                    results.append(("sonar-scanner-cli", _SR_OK, f"installed → {path}"))
-                else:
-                    results.append(("sonar-scanner-cli", _SR_FAIL, "download failed"))
-            except Exception as exc:
-                results.append(("sonar-scanner-cli", _SR_FAIL, str(exc)))
-
-    sq_home = _find_native_sonarqube()
-    if sq_home:
-        if not check:
-            from scanners.sonarqube_manager import patch_sonar_port
-            patch_sonar_port(sq_home)
-        results.append((_LABEL_SONARQUBE_CE, _SR_OK, f"port {SONAR_PORT} — {sq_home}"))
-    elif check:
-        results.append((_LABEL_SONARQUBE_CE, _SR_WARN, "not installed"))
-    else:
-        if not non_interactive:
-            _console.print(f"\n  [dim]SonarQube CE is ~500 MB.  Downloading to {_SQ_DIR}[/dim]")
-        with Status("Downloading SonarQube CE (~500 MB, this may take a few minutes)...", console=_console):
-            try:
-                path = asyncio.run(ensure_sonarqube())
-                if path:
-                    results.append((_LABEL_SONARQUBE_CE, _SR_OK, f"port {SONAR_PORT} — {path}"))
-                else:
-                    results.append((_LABEL_SONARQUBE_CE, _SR_FAIL, "download failed — check internet connection"))
-            except Exception as exc:
-                results.append((_LABEL_SONARQUBE_CE, _SR_FAIL, str(exc)))
-
-    sq_home = _find_native_sonarqube()
-    if not sq_home or check:
-        return
-
-    _console.print(f"\n  Starting SonarQube on port {SONAR_PORT} (first start can take ~2 min)...")
-    host_url = f"http://localhost:{SONAR_PORT}"
-    try:
-        up = asyncio.run(start_and_wait(sq_home, port=SONAR_PORT, timeout=180))
-    except Exception as exc:
-        results.append((_LABEL_SONARQUBE_START, _SR_FAIL, str(exc)))
-        return
-
-    if not up:
-        results.append((_LABEL_SONARQUBE_START, _SR_WARN, "did not become UP within 3 min — try starting manually"))
-        return
-
-    results.append((_LABEL_SONARQUBE_START, _SR_OK, f"running at {host_url}"))
-    try:
-        token, token_reason = asyncio.run(ensure_admin_token(host_url))
-    except Exception as exc:
-        token, token_reason = None, str(exc)
-
-    if token:
-        tok_ok = persist_env_var("SONAR_TOKEN", token)
-        url_ok = persist_env_var("SONAR_HOST_URL", host_url)
-        env_note = "saved to user environment" if (tok_ok and url_ok) else "shown below — save manually"
-        results.append(("Admin token", _SR_OK, env_note))
-        results.append(("SONAR_HOST_URL", _SR_OK, host_url))
-        _console.print(
-            "\n  [bold green]✔ SONAR_TOKEN[/bold green] and "
-            "[bold green]SONAR_HOST_URL[/bold green] have been written "
-            "to your user environment automatically."
-        )
-        _console.print("  Open a [bold]new[/bold] terminal window for them to take effect in future sessions.")
-        _console.print(f"\n  [dim]SONAR_TOKEN=[/dim][bold]{token}[/bold]")
-        _console.print(f"  [dim](Change the admin password at {host_url} when convenient.)[/dim]")
-    else:
-        results.append(("Admin token", _SR_WARN, token_reason))
-        persist_env_var("SONAR_HOST_URL", host_url)
-        results.append(("SONAR_HOST_URL", _SR_OK, f"{host_url} — saved to user environment"))
-        _console.print(f"\n  Generate a token at: [link]{host_url}/account/security[/link]")
-        _console.print(
-            "  Then run:\n"
-            "  [bold]sensitive-scanner setup --sonarqube[/bold]\n"
-            "  — or set it manually in a new terminal:\n"
-            '  [dim][Environment]::SetEnvironmentVariable("SONAR_TOKEN", "<your-token>", "User")[/dim]'
-        )
+    _setup_sonar_scanner_cli(check, results)
+    _setup_sonarqube_ce(check, non_interactive, results)
+    _setup_sonarqube_start(check, results)
 
 
 @app.command()
@@ -929,6 +1042,71 @@ def report(
 
 # ── obfuscate command ─────────────────────────────────────────────────────────
 
+def _obf_load_suppress(target: Path) -> tuple[set[str], dict[str, list[str]]]:
+    """Merge global + target suppress files. Returns (global_set, by_scanner)."""
+    persistent: set[str] = set()
+    by_scanner: dict[str, list[str]] = {}
+    for sup_path in (_ROOT / "config" / _SUPPRESS_FILE, target / _SUPPRESS_FILE):
+        if not sup_path.exists():
+            continue
+        g, per = parse_suppress_file(sup_path)
+        persistent.update(g)
+        for sc, rules in per.items():
+            by_scanner.setdefault(sc, []).extend(rules)
+    return persistent, by_scanner
+
+
+def _obf_apply_saved_session(
+    resolved: Path, target: Path, backup_dir: Path, dry_run: bool,
+    report_path: Path | None, show_secrets: bool, persistent: set[str],
+) -> None:
+    """Apply a previously saved review session without re-scanning or running the TUI."""
+    from obfuscation.session import ReviewSession
+    from obfuscation.engine import apply_session as _apply_session
+
+    if not resolved.exists():
+        _console.print(f"[bold red]Session file not found:[/bold red] {resolved}")
+        _console.print(f"[dim]Expected at: {resolved.resolve()}[/dim]")
+        raise typer.Exit(code=1)
+    _console.print(f"[dim]Loading session: {resolved}[/dim]")
+    session = ReviewSession.load(resolved)
+    # Filter any session items whose finding has since been suppressed
+    if persistent:
+        before = len(session.items)
+        session.items = [i for i in session.items if i.rule_id not in persistent]
+        dropped = before - len(session.items)
+        if dropped:
+            _console.print(f"[dim]Suppressed {dropped} session item(s) matching suppress rules.[/dim]")
+    _apply_session(session, target, backup_dir, dry_run=dry_run, console=_console)
+    if report_path:
+        _write_obfuscation_report(None, session, report_path, dry_run=dry_run, show_secrets=show_secrets)
+
+
+def _obf_parse_scanners(scanners: str | None) -> list[str] | None:
+    """Parse and validate a comma-separated scanner list."""
+    if not scanners:
+        return None
+    scanner_list = [s.strip().lower() for s in scanners.split(",")]
+    unknown = set(scanner_list) - _VALID_SCANNERS
+    if unknown:
+        _console.print(f"[bold red]Unknown scanner(s):[/bold red] {', '.join(unknown)}")
+        raise typer.Exit(code=1)
+    return scanner_list
+
+
+def _obf_print_summary(report) -> None:
+    """Print the post-scan severity summary line."""
+    s = report.summary
+    _console.print(
+        f"\n[bold]Scan complete[/bold] — "
+        f"Total: [bold]{s.total}[/bold]  "
+        f"[bold red]Critical: {s.critical}[/bold red]  "
+        f"[bold dark_orange]High: {s.high}[/bold dark_orange]  "
+        f"[bold yellow]Medium: {s.medium}[/bold yellow]  "
+        f"[bold cyan]Low: {s.low}[/bold cyan]"
+    )
+
+
 @app.command()
 def obfuscate(
     path: Path = typer.Argument(
@@ -1032,52 +1210,19 @@ def obfuscate(
     _session_path = session_file or (target / "pii-review-session.json")
 
     # ── Load suppress files (must happen before any early return) ─────────────
-    _persistent_suppress: set[str] = set()
-    _suppress_by_scanner: dict[str, list[str]] = {}
-
-    def _merge_sup(sup_path: Path) -> None:
-        if not sup_path.exists():
-            return
-        g, per = parse_suppress_file(sup_path)
-        _persistent_suppress.update(g)
-        for sc, rules in per.items():
-            _suppress_by_scanner.setdefault(sc, []).extend(rules)
-
-    _merge_sup(_ROOT / "config" / _SUPPRESS_FILE)
-    _merge_sup(target / _SUPPRESS_FILE)
+    _persistent_suppress, _suppress_by_scanner = _obf_load_suppress(target)
 
     # ── --apply / --apply-session shortcut (no scan, no TUI) ─────────────────
     _resolved_session = apply_session_file or (_session_path if apply_default else None)
     if _resolved_session is not None:
-        if not _resolved_session.exists():
-            _console.print(f"[bold red]Session file not found:[/bold red] {_resolved_session}")
-            _console.print(f"[dim]Expected at: {_resolved_session.resolve()}[/dim]")
-            raise typer.Exit(code=1)
-        _console.print(f"[dim]Loading session: {_resolved_session}[/dim]")
-        session = ReviewSession.load(_resolved_session)
-        # Filter any session items whose finding has since been suppressed
-        if _persistent_suppress:
-            before = len(session.items)
-            session.items = [
-                i for i in session.items
-                if i.rule_id not in _persistent_suppress
-            ]
-            dropped = before - len(session.items)
-            if dropped:
-                _console.print(f"[dim]Suppressed {dropped} session item(s) matching suppress rules.[/dim]")
-        _apply_session(session, target, _backup_dir, dry_run=dry_run, console=_console)
-        if report_path:
-            _write_obfuscation_report(None, session, report_path, dry_run=dry_run, show_secrets=show_secrets)
+        _obf_apply_saved_session(
+            _resolved_session, target, _backup_dir, dry_run,
+            report_path, show_secrets, _persistent_suppress,
+        )
         return
 
     # ── Parse scanners ────────────────────────────────────────────────────────
-    scanner_list: list[str] | None = None
-    if scanners:
-        scanner_list = [s.strip().lower() for s in scanners.split(",")]
-        unknown = set(scanner_list) - _VALID_SCANNERS
-        if unknown:
-            _console.print(f"[bold red]Unknown scanner(s):[/bold red] {', '.join(unknown)}")
-            raise typer.Exit(code=1)
+    scanner_list = _obf_parse_scanners(scanners)
 
     # ── Run scan (show_secrets=True to capture raw match values) ─────────────
     scan_config = ScanConfig(
@@ -1105,15 +1250,7 @@ def obfuscate(
         _report.findings = suppress_findings(_report.findings, _persistent_suppress)
         _report.build_summary()
 
-    s = _report.summary
-    _console.print(
-        f"\n[bold]Scan complete[/bold] — "
-        f"Total: [bold]{s.total}[/bold]  "
-        f"[bold red]Critical: {s.critical}[/bold red]  "
-        f"[bold dark_orange]High: {s.high}[/bold dark_orange]  "
-        f"[bold yellow]Medium: {s.medium}[/bold yellow]  "
-        f"[bold cyan]Low: {s.low}[/bold cyan]"
-    )
+    _obf_print_summary(_report)
 
     if not _report.findings:
         _console.print("[bold green]No findings — nothing to obfuscate.[/bold green]")
@@ -1267,6 +1404,77 @@ def rollback(
 
 # ── Entry point ───────────────────────────────────────────────────────────────
 
+_VALID_DECISIONS = {"approved", "skipped", "pending"}
+
+
+def _edit_show_current(item) -> None:
+    """Print the current state of a session item."""
+    from rich.table import Table
+    tbl = Table.grid(padding=(0, 2))
+    tbl.add_column(style="dim", min_width=14)
+    tbl.add_column()
+    tbl.add_row("ID",          item.finding_id)
+    tbl.add_row("File",        f"{item.file}:{item.line}")
+    tbl.add_row("Category",    item.category)
+    tbl.add_row("Decision",    item.decision)
+    tbl.add_row("Replacement", f"[green]{item.replacement}[/green]")
+    if item.skip_reason:
+        tbl.add_row("Skip reason", item.skip_reason)
+    _console.print(tbl)
+    _console.print()
+
+
+def _edit_update_decision(item, decision: str | None) -> None:
+    """Update the item decision from a flag or interactive prompt."""
+    if decision is not None:
+        if decision not in _VALID_DECISIONS:
+            _console.print(f"[bold red]Invalid decision:[/bold red] '{decision}'. Must be one of: {', '.join(sorted(_VALID_DECISIONS))}")
+            raise typer.Exit(code=1)
+        item.decision = decision  # type: ignore[assignment]
+        return
+    from rich.prompt import Prompt
+    new_decision = Prompt.ask(
+        f"  [bold]Decision[/bold] (current: [dim]{item.decision}[/dim] — press Enter to keep)",
+        console=_console,
+        default=item.decision,
+    ).strip()
+    if new_decision in _VALID_DECISIONS:
+        item.decision = new_decision  # type: ignore[assignment]
+
+
+def _edit_update_replacement(item, replacement: str | None) -> None:
+    """Update the replacement token from a flag or interactive prompt."""
+    if replacement is not None:
+        item.replacement = replacement
+        return
+    from rich.prompt import Prompt
+    new_rep = Prompt.ask(
+        f"  [bold]Replacement token[/bold] (current: [green]{item.replacement}[/green] — press Enter to keep)",
+        console=_console,
+        default=item.replacement,
+    ).strip()
+    if new_rep:
+        item.replacement = new_rep
+
+
+def _edit_update_skip_reason(item, skip_reason: str | None) -> None:
+    """Update or clear the skip reason based on the current decision."""
+    if item.decision != "skipped":
+        item.skip_reason = ""
+        return
+    if skip_reason is not None:
+        item.skip_reason = skip_reason
+        return
+    from rich.prompt import Prompt
+    new_reason = Prompt.ask(
+        r"  [bold]Skip reason[/bold] (optional \[press Enter to keep])",
+        console=_console,
+        default=item.skip_reason or "",
+    ).strip()
+    if new_reason.lower() not in {"a", "s", "q", "e"}:
+        item.skip_reason = new_reason
+
+
 @app.command()
 def edit(
     finding_id: str = typer.Argument(
@@ -1328,65 +1536,12 @@ def edit(
         raise typer.Exit(code=1)
 
     # ── Show current state ────────────────────────────────────────────────────
-    from rich.table import Table
-    tbl = Table.grid(padding=(0, 2))
-    tbl.add_column(style="dim", min_width=14)
-    tbl.add_column()
-    tbl.add_row("ID",          item.finding_id)
-    tbl.add_row("File",        f"{item.file}:{item.line}")
-    tbl.add_row("Category",    item.category)
-    tbl.add_row("Decision",    item.decision)
-    tbl.add_row("Replacement", f"[green]{item.replacement}[/green]")
-    if item.skip_reason:
-        tbl.add_row("Skip reason", item.skip_reason)
-    _console.print(tbl)
-    _console.print()
+    _edit_show_current(item)
 
     # ── Apply changes (interactive if flags not supplied) ─────────────────────
-    _VALID_DECISIONS = {"approved", "skipped", "pending"}
-
-    if decision is not None:
-        if decision not in _VALID_DECISIONS:
-            _console.print(f"[bold red]Invalid decision:[/bold red] '{decision}'. Must be one of: {', '.join(sorted(_VALID_DECISIONS))}")
-            raise typer.Exit(code=1)
-        item.decision = decision  # type: ignore[assignment]
-    else:
-        from rich.prompt import Prompt
-        new_decision = Prompt.ask(
-            f"  [bold]Decision[/bold] (current: [dim]{item.decision}[/dim] — press Enter to keep)",
-            console=_console,
-            default=item.decision,
-        ).strip()
-        if new_decision in _VALID_DECISIONS:
-            item.decision = new_decision  # type: ignore[assignment]
-
-    if replacement is not None:
-        item.replacement = replacement
-    else:
-        from rich.prompt import Prompt
-        new_rep = Prompt.ask(
-            f"  [bold]Replacement token[/bold] (current: [green]{item.replacement}[/green] — press Enter to keep)",
-            console=_console,
-            default=item.replacement,
-        ).strip()
-        if new_rep:
-            item.replacement = new_rep
-
-    if item.decision == "skipped":
-        if skip_reason is not None:
-            item.skip_reason = skip_reason
-        else:
-            from rich.prompt import Prompt
-            new_reason = Prompt.ask(
-                r"  [bold]Skip reason[/bold] (optional \[press Enter to keep])",
-                console=_console,
-                default=item.skip_reason or "",
-            ).strip()
-            if new_reason.lower() not in {"a", "s", "q", "e"}:
-                item.skip_reason = new_reason
-    else:
-        # Clear skip reason if decision changed away from skipped
-        item.skip_reason = ""
+    _edit_update_decision(item, decision)
+    _edit_update_replacement(item, replacement)
+    _edit_update_skip_reason(item, skip_reason)
 
     # ── Save session ──────────────────────────────────────────────────────────
     session.save(_session_path)

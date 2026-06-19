@@ -5,8 +5,10 @@ import fnmatch
 import json
 import shutil
 import sys
-import tempfile
 from pathlib import Path
+
+import aiofiles
+import aiofiles.tempfile
 
 from models.finding import Finding, ScanConfig
 from remediation.engine import RemediationEngine
@@ -64,8 +66,8 @@ class GitleaksScanner(AbstractScanner):
         # If running via container the source arg is /code, else the real path
         scan_source = "/code" if "{source}" in " ".join(cmd_prefix) else source_path
 
-        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tmp:
-            report_path = tmp.name
+        async with aiofiles.tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tmp:
+            report_path = str(tmp.name)
 
         try:
             args = [
@@ -98,7 +100,8 @@ class GitleaksScanner(AbstractScanner):
                 return []
 
             try:
-                raw = Path(report_path).read_text(encoding="utf-8")
+                async with aiofiles.open(report_path, encoding="utf-8") as fh:
+                    raw = await fh.read()
                 data = json.loads(raw) if raw.strip() else []
             except (json.JSONDecodeError, FileNotFoundError):
                 return []
