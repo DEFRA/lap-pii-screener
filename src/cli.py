@@ -23,7 +23,7 @@ import yaml
 
 # Ensure project root is importable when run directly (python cli.py ...)
 _ROOT = Path(__file__).parent.resolve()
-if str(_ROOT) not in sys.path:
+if str(_ROOT) not in sys.path:  # pragma: no cover - import-time path bootstrap
     sys.path.insert(0, str(_ROOT))
 
 import typer
@@ -1557,5 +1557,5 @@ def main() -> None:
     app()
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     main()

@@ -149,7 +149,7 @@ def persist_env_var(name: str, value: str) -> bool:
                 ctypes.windll.user32.SendMessageTimeoutW(
                     0xFFFF, 0x001A, 0, "Environment", 2, 5000, None
                 )
-            except (OSError, AttributeError):
+            except (OSError, AttributeError):  # pragma: no cover - best-effort broadcast
                 pass
             return True
         except OSError as exc:
@@ -290,7 +290,7 @@ async def _download_and_extract_zip(
     finally:
         try:
             tmp_path.unlink(missing_ok=True)
-        except OSError:
+        except OSError:  # pragma: no cover - defensive cleanup
             pass
 
 
@@ -439,7 +439,7 @@ async def ensure_sonarqube(progress_callback=None) -> Optional[Path]:
                 script.chmod(
                     script.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
                 )
-            except OSError:
+            except OSError:  # pragma: no cover - defensive chmod
                 pass
 
     meta = _load_meta()
@@ -588,4 +588,4 @@ async def ensure_admin_token(host_url: str) -> tuple[Optional[str], str]:
         except (httpx.HTTPError, ValueError) as exc:
             return None, f"Token generation exception: {exc}"
 
-    return None, "Unknown error"
+    return None, "Unknown error"  # pragma: no cover - unreachable fallthrough

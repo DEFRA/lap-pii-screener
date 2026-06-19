@@ -280,7 +280,7 @@ async def ensure_binary(name: str) -> Optional[Path]:
     finally:
         try:
             tmp_path.unlink(missing_ok=True)
-        except OSError:
+        except OSError:  # pragma: no cover - defensive cleanup
             pass
 
 

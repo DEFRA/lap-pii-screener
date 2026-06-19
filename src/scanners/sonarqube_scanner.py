@@ -45,7 +45,7 @@ def _find_native_sonarqube() -> Optional[Path]:
         )
         if matches:
             return matches[0]
-    for candidate in [
+    for candidate in [  # pragma: no cover - Windows fixed-path discovery fallback
         Path("C:/sonarqube"),
         Path("C:/tools/sonarqube"),
         Path("C:/Program Files/SonarQube"),
@@ -212,7 +212,7 @@ def _print_startup_diagnostics(log_dir: Path) -> None:
             print(f"\n[sonarqube] ── {log_name} (last errors) ──", file=sys.stderr)
             for line in (errors or tail[-10:]):
                 print(f"  {line}", file=sys.stderr)
-        except OSError:
+        except OSError:  # pragma: no cover - defensive log read
             pass
     print(
         "\n[sonarqube] Common fixes:\n"
