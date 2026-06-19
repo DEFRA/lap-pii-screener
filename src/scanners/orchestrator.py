@@ -52,6 +52,61 @@ async def detect_available_scanners(requested: list[str]) -> tuple[list[Abstract
     return available, tier
 
 
+def _apply_suppression_per_scanner(
+    scanners: list[AbstractScanner],
+    all_results: list[list[Finding]],
+    config: ScanConfig,
+) -> list[list[Finding]]:
+    """Apply per-scanner and global rule suppression to raw scan results."""
+    global_rules: set[str] = set(config.suppress_global)
+    filtered: list[list[Finding]] = []
+    for scanner, results in zip(scanners, all_results):
+        rules = global_rules | set(config.suppress_by_scanner.get(scanner.name, []))
+        if rules:
+            results = [
+                f for f in results
+                if f.rule_id not in rules
+                and not any(
+                    ref == r or ref.startswith(r + ":") or ref.startswith(r + " ")
+                    for ref in f.references for r in rules
+                )
+            ]
+        filtered.append(results)
+    return filtered
+
+
+def _build_report(
+    config: ScanConfig,
+    findings: list[Finding],
+    scan_start: float,
+    tier: int,
+    scanner_names: list[str],
+    scanner_durations: dict[str, float],
+    scanners: list[AbstractScanner],
+) -> Report:
+    """Assemble a Report from scan results and populate summary fields."""
+    import time
+    report = Report(
+        scan_id=str(uuid.uuid4())[:8],
+        target_path=config.path,
+        project_name=config.project_name,
+        scanned_at=datetime.now(timezone.utc),
+        duration_seconds=round(time.monotonic() - scan_start, 2),
+        tier_used=tier,
+        scanners_run=scanner_names,
+        scanner_durations=scanner_durations,
+        findings=findings,
+    )
+    report.build_summary()
+    pii_scanner = next((s for s in scanners if s.name == "presidio"), None)
+    if pii_scanner is not None:
+        report.summary.files_scanned = getattr(pii_scanner, "_files_scanned", 0)
+        report.summary.files_skipped = getattr(pii_scanner, "_files_skipped", 0)
+        report.summary.lines_scanned = getattr(pii_scanner, "_lines_scanned", 0)
+        report.summary.lines_skipped = getattr(pii_scanner, "_lines_skipped", 0)
+    return report
+
+
 async def run_scan(config: ScanConfig) -> Report:
     """
     Orchestrate all requested scanners in parallel, deduplicate, attach
@@ -84,46 +139,14 @@ async def run_scan(config: ScanConfig) -> Report:
         *(_timed(s) for s in scanners), return_exceptions=False
     )
 
-    # Apply per-scanner rule suppression before merging
-    global_rules: set[str] = set(config.suppress_global)
-    filtered_results: list[list[Finding]] = []
-    for scanner, results in zip(scanners, all_results):
-        rules = global_rules | set(config.suppress_by_scanner.get(scanner.name, []))
-        if rules:
-            results = [
-                f for f in results
-                if f.rule_id not in rules
-                and not any(
-                    ref == r or ref.startswith(r + ":") or ref.startswith(r + " ")
-                    for ref in f.references for r in rules
-                )
-            ]
-        filtered_results.append(results)
+    filtered_results = _apply_suppression_per_scanner(scanners, all_results, config)
 
     # Flatten and deduplicate
     raw: list[Finding] = [f for batch in filtered_results for f in batch]
     findings = _deduplicate(raw)
     findings = _filter_inline_suppressions(findings, config.path)
 
-    report = Report(
-        scan_id=str(uuid.uuid4())[:8],
-        target_path=config.path,
-        project_name=config.project_name,
-        scanned_at=datetime.now(timezone.utc),
-        duration_seconds=round(time.monotonic() - _scan_start, 2),
-        tier_used=tier,
-        scanners_run=scanner_names,
-        scanner_durations=_scanner_durations,
-        findings=findings,
-    )
-    report.build_summary()
-    # Propagate file count from the PII scanner (only scanner that walks files itself)
-    pii_scanner = next((s for s in scanners if s.name == "presidio"), None)
-    if pii_scanner is not None:
-        report.summary.files_scanned = getattr(pii_scanner, "_files_scanned", 0)
-        report.summary.files_skipped = getattr(pii_scanner, "_files_skipped", 0)
-        report.summary.lines_scanned = getattr(pii_scanner, "_lines_scanned", 0)
-        report.summary.lines_skipped = getattr(pii_scanner, "_lines_skipped", 0)
+    report = _build_report(config, findings, _scan_start, tier, scanner_names, _scanner_durations, scanners)
     _cache_report(report)
     return report
 

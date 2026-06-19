@@ -132,6 +132,112 @@ def _validate_path(path: Path) -> Path:
     return path
 
 
+def _load_yaml_config(config_file: Optional[Path], target: Path) -> dict:
+    """Load the YAML config file (explicit or auto-discovered). Returns a config dict."""
+    cfg_path = config_file or target / "sensitive-scanner.yaml"
+    if cfg_path and Path(cfg_path).exists():
+        try:
+            with open(cfg_path, encoding="utf-8") as fh:
+                cfg = yaml.safe_load(fh) or {}
+            _console.print(f"[dim]Using config: {Path(cfg_path).resolve()}[/dim]")
+            return cfg
+        except Exception as exc:
+            _console.print(f"[bold yellow]Warning:[/bold yellow] Could not read config file: {exc}")
+    return {}
+
+
+def _load_suppress_config(
+    target: Path, cfg: dict
+) -> tuple[set[str], dict[str, list[str]]]:
+    """Load suppress rules from install-level and per-project suppress files + config."""
+    persistent: set[str] = set()
+    by_scanner: dict[str, list[str]] = {}
+
+    def _merge(path: Path) -> None:
+        if not path.exists():
+            return
+        g, per = parse_suppress_file(path)
+        persistent.update(g)
+        for scanner, rules in per.items():
+            by_scanner.setdefault(scanner, []).extend(rules)
+
+    _merge(_ROOT / "config" / _SUPPRESS_FILE)
+    _merge(target / _SUPPRESS_FILE)
+
+    cfg_sbs = cfg.get("suppress_by_scanner", {})
+    if isinstance(cfg_sbs, dict):
+        for sc, rules in cfg_sbs.items():
+            if isinstance(rules, list):
+                by_scanner.setdefault(sc, []).extend(str(r) for r in rules)
+
+    return persistent, by_scanner
+
+
+def _collect_exclusion_lists(
+    target: Path,
+    cfg: dict,
+    exclude: Optional[str],
+    output: Optional[Path],
+) -> tuple[list[str], list[str], list[str]]:
+    """Build (extra_dir_excludes, extra_patterns, excluded_files) from config and flags."""
+    extra_dir_excludes: list[str] = []
+    extra_patterns: list[str] = []
+    excluded_files: list[str] = []
+
+    def _is_pattern(s: str) -> bool:
+        return any(c in s for c in ("*", "?", "[", "/", "\\"))
+
+    def _add_entry(entry: str) -> None:
+        entry = entry.replace("\\", "/")
+        if _is_pattern(entry):
+            extra_patterns.append(entry)
+        elif "." in entry.split("/")[-1] and "/" not in entry:
+            excluded_files.append(entry)
+        else:
+            extra_dir_excludes.append(entry)
+
+    cfg_exc = cfg.get("exclude", {})
+    if isinstance(cfg_exc, dict):
+        for d in cfg_exc.get("directories", []):
+            extra_dir_excludes.append(str(d))
+        for p in cfg_exc.get("patterns", []):
+            extra_patterns.append(str(p).replace("\\", "/"))
+        for fi in cfg_exc.get("files", []):
+            excluded_files.append(str(fi).replace("\\", "/"))
+
+    ignore_file = target / ".scannerignore"
+    if ignore_file.exists():
+        _console.print(f"[dim]Using .scannerignore: {ignore_file.resolve()}[/dim]")
+        for raw in ignore_file.read_text(encoding="utf-8").splitlines():
+            entry = raw.split("#", 1)[0].strip()
+            if entry:
+                _add_entry(entry)
+    else:
+        _console.print(f"[dim]No .scannerignore found at {ignore_file.resolve()}[/dim]")
+
+    if exclude:
+        for entry in (x.strip() for x in exclude.split(",") if x.strip()):
+            _add_entry(entry)
+
+    if output:
+        try:
+            rel = output.resolve().relative_to(target)
+            excluded_files.append(str(rel))
+        except ValueError:
+            pass
+
+    _REPORT_SUFFIXES = {".html", ".json", ".md"}
+    _REPORT_STEMS = {"combined_pii_report", "pii_report", "scan_report", "sensitive_scan_report", "report"}
+    for p in target.iterdir():
+        if p.is_file() and p.suffix.lower() in _REPORT_SUFFIXES and p.stem.lower() in _REPORT_STEMS:
+            try:
+                excluded_files.append(str(p.relative_to(target)))
+            except ValueError:
+                pass
+
+    return extra_dir_excludes, extra_patterns, excluded_files
+
+
 # ── Commands ──────────────────────────────────────────────────────────────────
 
 @app.command()
@@ -256,7 +362,6 @@ def scan(
             _console.print(f"Valid options: {', '.join(sorted(_VALID_SCANNERS))}")
             raise typer.Exit(code=1)
 
-    # Validate format
     if fmt not in _VALID_FORMATS:
         _console.print(f"[bold red]Unknown format:[/bold red] {fmt!r}")
         _console.print(f"Valid options: {', '.join(sorted(_VALID_FORMATS))}")
@@ -264,16 +369,7 @@ def scan(
 
     from models.finding import _DEFAULT_EXCLUDE
 
-    # ── Load YAML config file (auto-discover or explicit --config) ────────
-    _cfg: dict = {}
-    _cfg_path = config_file or target / "sensitive-scanner.yaml"
-    if _cfg_path and Path(_cfg_path).exists():
-        try:
-            with open(_cfg_path, encoding="utf-8") as _f:
-                _cfg = yaml.safe_load(_f) or {}
-            _console.print(f"[dim]Using config: {Path(_cfg_path).resolve()}[/dim]")
-        except Exception as _e:
-            _console.print(f"[bold yellow]Warning:[/bold yellow] Could not read config file: {_e}")
+    _cfg = _load_yaml_config(config_file, target)
 
     # Merge config file values — CLI flags take precedence (None = not supplied)
     if scanners is None and _cfg.get("scanners"):
@@ -296,94 +392,10 @@ def scan(
         _sup = _cfg["suppress"]
         suppress = ",".join(_sup) if isinstance(_sup, list) else str(_sup)
 
-    # ── Load suppress files (global + per-scanner) ────────────────────────
-    _persistent_suppress: set[str] = set()
-    _suppress_by_scanner: dict[str, list[str]] = {}
-
-    def _merge_suppress(path: Path) -> None:
-        if not path.exists():
-            return
-        g, per = parse_suppress_file(path)
-        _persistent_suppress.update(g)
-        for scanner, rules in per.items():
-            _suppress_by_scanner.setdefault(scanner, []).extend(rules)
-
-    _merge_suppress(_ROOT / "config" / _SUPPRESS_FILE)   # global install-level
-    _merge_suppress(target / _SUPPRESS_FILE)              # per-project
-
-    # Per-scanner rules from sensitive-scanner.yaml suppress_by_scanner key
-    _cfg_sbs = _cfg.get("suppress_by_scanner", {})
-    if isinstance(_cfg_sbs, dict):
-        for _sc, _rules in _cfg_sbs.items():
-            if isinstance(_rules, list):
-                _suppress_by_scanner.setdefault(_sc, []).extend(str(r) for r in _rules)
-
-    # ── Parse exclusions ──────────────────────────────────────────────────
-    # An entry is a "glob pattern" if it contains * ? [ or a path separator.
-    # Otherwise it is treated as a plain directory name (matched on path parts).
-    def _is_pattern(s: str) -> bool:
-        return any(c in s for c in ("*", "?", "[", "/", "\\"))
-
-    def _add_entry(entry: str) -> None:
-        """Route a raw entry to dir-names, glob-patterns, or excluded files."""
-        entry = entry.replace("\\", "/")
-        if _is_pattern(entry):
-            extra_patterns.append(entry)
-        elif "." in entry.split("/")[-1] and "/" not in entry:
-            # Plain filename with an extension (e.g. report.html) — exclude as a file
-            excluded_files.append(entry)
-        else:
-            extra_dir_excludes.append(entry)
-
-    extra_dir_excludes: list[str] = []
-    extra_patterns: list[str] = []
-    excluded_files: list[str] = []
-
-    # Pull exclude entries from the config file
-    _cfg_exc = _cfg.get("exclude", {})
-    if isinstance(_cfg_exc, dict):
-        for _d in _cfg_exc.get("directories", []):
-            extra_dir_excludes.append(str(_d))
-        for _p in _cfg_exc.get("patterns", []):
-            extra_patterns.append(str(_p).replace("\\", "/"))
-        for _fi in _cfg_exc.get("files", []):
-            excluded_files.append(str(_fi).replace("\\", "/"))
-
-    # Load .scannerignore from the scan target (if present)
-    ignore_file = target / ".scannerignore"
-    if ignore_file.exists():
-        _console.print(f"[dim]Using .scannerignore: {ignore_file.resolve()}[/dim]")
-        for raw in ignore_file.read_text(encoding="utf-8").splitlines():
-            entry = raw.split("#", 1)[0].strip()
-            if not entry:
-                continue
-            _add_entry(entry)
-    else:
-        _console.print(f"[dim]No .scannerignore found at {ignore_file.resolve()}[/dim]")
-
-    # Parse --exclude flag (supports both dir names and glob patterns)
-    if exclude:
-        for entry in (x.strip() for x in exclude.split(",") if x.strip()):
-            _add_entry(entry)
-
-    # If --output is inside the scan directory, exclude it automatically
-    if output:
-        try:
-            rel = output.resolve().relative_to(target)
-            excluded_files.append(str(rel))
-        except ValueError:
-            pass  # output is outside the scan root — no action needed
-
-    # Auto-exclude any previously generated PII-Screener report files sitting
-    # in the scan root (e.g. combined_pii_report.html left over from a prior run).
-    _REPORT_SUFFIXES = {".html", ".json", ".md"}
-    _REPORT_STEMS = {"combined_pii_report", "pii_report", "scan_report", "sensitive_scan_report", "report"}
-    for _p in target.iterdir():
-        if _p.is_file() and _p.suffix.lower() in _REPORT_SUFFIXES and _p.stem.lower() in _REPORT_STEMS:
-            try:
-                excluded_files.append(str(_p.relative_to(target)))
-            except ValueError:
-                pass
+    _persistent_suppress, _suppress_by_scanner = _load_suppress_config(target, _cfg)
+    extra_dir_excludes, extra_patterns, excluded_files = _collect_exclusion_lists(
+        target, _cfg, exclude, output
+    )
 
     config = ScanConfig(
         path=str(target),
@@ -555,6 +567,242 @@ def status() -> None:
     _console.print("\n[dim]Run [bold]sensitive-scanner setup[/bold] to install missing tools.  Add [bold]--sonarqube[/bold] or [bold]--all[/bold] for full setup.[/dim]")
 
 
+# ── setup helpers ─────────────────────────────────────────────────────────────
+
+_SetupRow = tuple[str, str, str]  # (component, emoji_markup, note)
+
+_SR_OK   = "[bold green]✅[/bold green]"
+_SR_WARN = "[bold yellow]⚠ [/bold yellow]"
+_SR_FAIL = "[bold red]✗ [/bold red]"
+_SR_SKIP = "[dim]–[/dim]"
+
+
+def _run_gitleaks_setup(check: bool, results: list) -> None:
+    """Append Gitleaks status row(s) to *results*."""
+    from scanners.binary_manager import ensure_binary, is_installed
+    from rich.status import Status
+    if is_installed("gitleaks"):
+        results.append(("Gitleaks", _SR_OK, "already installed" if not check else "installed"))
+        return
+    if check:
+        results.append(("Gitleaks", _SR_WARN, "not downloaded (auto-downloads on first scan)"))
+        return
+    with Status("Downloading Gitleaks...", console=_console):
+        try:
+            path = asyncio.run(ensure_binary("gitleaks"))
+            if path:
+                results.append(("Gitleaks", _SR_OK, f"downloaded → {path}"))
+            else:
+                results.append(("Gitleaks", _SR_WARN, "no binary for this platform (uses system PATH)"))
+        except Exception as exc:
+            results.append(("Gitleaks", _SR_FAIL, f"download failed: {exc}"))
+
+
+def _run_semgrep_setup(check: bool, results: list) -> None:
+    """Append Semgrep status row(s) to *results*."""
+    import subprocess
+    import shutil
+    import sys as _sys
+    from rich.status import Status
+    semgrep_path = shutil.which("semgrep")
+    if semgrep_path:
+        results.append(("Semgrep", _SR_OK, semgrep_path))
+        return
+    if check:
+        results.append(("Semgrep", _SR_WARN, "not found — run: pip install semgrep"))
+        return
+    with Status("Installing Semgrep via pip...", console=_console):
+        try:
+            r = subprocess.run(
+                [_sys.executable, "-m", "pip", "install", "--quiet", "semgrep"],
+                capture_output=True, text=True, timeout=300,
+            )
+            if r.returncode == 0:
+                results.append(("Semgrep", _SR_OK, "installed"))
+            else:
+                err = r.stderr.strip().splitlines()[-1] if r.stderr.strip() else "pip failed"
+                results.append(("Semgrep", _SR_FAIL, err))
+        except Exception as exc:
+            results.append(("Semgrep", _SR_FAIL, str(exc)))
+
+
+def _run_spacy_setup(check: bool, do_spacy: bool, results: list) -> None:
+    """Append spaCy status row(s) to *results*."""
+    import subprocess
+    import sys as _sys
+    from rich.status import Status
+
+    if not do_spacy:
+        try:
+            import spacy as _spacy  # type: ignore
+            try:
+                _spacy.load("en_core_web_sm")
+                results.append(("spaCy", _SR_OK, "en_core_web_sm ready"))
+            except OSError:
+                results.append(("spaCy", _SR_WARN, "model missing — run: sensitive-scanner setup --spacy"))
+        except ImportError:
+            results.append(("spaCy", _SR_SKIP, "optional — add --spacy to install"))
+        return
+
+    spacy_ok = False
+    try:
+        import spacy as _spacy  # type: ignore
+        spacy_ok = True
+    except ImportError:
+        if check:
+            results.append(("spaCy", _SR_WARN, "not installed — run: pip install spacy"))
+        else:
+            with Status("Installing spaCy via pip...", console=_console):
+                try:
+                    r = subprocess.run(
+                        [_sys.executable, "-m", "pip", "install", "--quiet", "spacy"],
+                        capture_output=True, text=True, timeout=300,
+                    )
+                    spacy_ok = r.returncode == 0
+                    if not spacy_ok:
+                        results.append(("spaCy", _SR_FAIL, "pip install failed"))
+                except Exception as exc:
+                    results.append(("spaCy", _SR_FAIL, str(exc)))
+
+    if not spacy_ok:
+        return
+
+    try:
+        import spacy as _spacy  # type: ignore
+        _spacy.load("en_core_web_sm")
+        results.append(("spaCy", _SR_OK, "en_core_web_sm ready"))
+    except OSError:
+        if check:
+            results.append(("spaCy", _SR_WARN, "installed but en_core_web_sm model missing"))
+            return
+        with Status("Downloading en_core_web_sm model...", console=_console):
+            try:
+                r = subprocess.run(
+                    [_sys.executable, "-m", "spacy", "download", "en_core_web_sm"],
+                    capture_output=True, text=True, timeout=300,
+                )
+                if r.returncode == 0:
+                    results.append(("spaCy", _SR_OK, "en_core_web_sm downloaded"))
+                else:
+                    results.append(("spaCy", _SR_FAIL, "model download failed"))
+            except Exception as exc:
+                results.append(("spaCy", _SR_FAIL, str(exc)))
+
+
+def _run_sonarqube_setup(
+    check: bool, do_sonarqube: bool, non_interactive: bool, results: list
+) -> None:
+    """Append SonarQube status row(s) to *results*."""
+    from scanners.sonarqube_manager import (
+        SONAR_PORT, check_java, ensure_sonar_scanner, ensure_sonarqube,
+        ensure_admin_token, persist_env_var, sonar_scanner_installed,
+        start_and_wait, _SQ_DIR, _SCANNER_DIR,
+    )
+    from scanners.sonarqube_scanner import _find_native_sonarqube
+    from rich.status import Status
+
+    if not do_sonarqube:
+        sq_home = _find_native_sonarqube()
+        if sq_home:
+            results.append((_LABEL_SONARQUBE_CE, _SR_OK, f"installed at {sq_home}"))
+        else:
+            results.append((_LABEL_SONARQUBE_CE, _SR_SKIP, "optional — add --sonarqube to auto-download"))
+        return
+
+    java_ok, java_msg = check_java()
+    if not java_ok:
+        results.append(("Java 17+", _SR_FAIL, java_msg))
+        results.append(("sonar-scanner-cli", _SR_SKIP, "skipped — Java required"))
+        results.append((_LABEL_SONARQUBE_CE, _SR_SKIP, "skipped — Java required"))
+        return
+
+    results.append(("Java 17+", _SR_OK, java_msg))
+
+    if sonar_scanner_installed():
+        results.append(("sonar-scanner-cli", _SR_OK, f"{_SCANNER_DIR}"))
+    elif check:
+        results.append(("sonar-scanner-cli", _SR_WARN, "not installed"))
+    else:
+        with Status("Downloading sonar-scanner-cli...", console=_console):
+            try:
+                path = asyncio.run(ensure_sonar_scanner())
+                if path:
+                    results.append(("sonar-scanner-cli", _SR_OK, f"installed → {path}"))
+                else:
+                    results.append(("sonar-scanner-cli", _SR_FAIL, "download failed"))
+            except Exception as exc:
+                results.append(("sonar-scanner-cli", _SR_FAIL, str(exc)))
+
+    sq_home = _find_native_sonarqube()
+    if sq_home:
+        if not check:
+            from scanners.sonarqube_manager import patch_sonar_port
+            patch_sonar_port(sq_home)
+        results.append((_LABEL_SONARQUBE_CE, _SR_OK, f"port {SONAR_PORT} — {sq_home}"))
+    elif check:
+        results.append((_LABEL_SONARQUBE_CE, _SR_WARN, "not installed"))
+    else:
+        if not non_interactive:
+            _console.print(f"\n  [dim]SonarQube CE is ~500 MB.  Downloading to {_SQ_DIR}[/dim]")
+        with Status("Downloading SonarQube CE (~500 MB, this may take a few minutes)...", console=_console):
+            try:
+                path = asyncio.run(ensure_sonarqube())
+                if path:
+                    results.append((_LABEL_SONARQUBE_CE, _SR_OK, f"port {SONAR_PORT} — {path}"))
+                else:
+                    results.append((_LABEL_SONARQUBE_CE, _SR_FAIL, "download failed — check internet connection"))
+            except Exception as exc:
+                results.append((_LABEL_SONARQUBE_CE, _SR_FAIL, str(exc)))
+
+    sq_home = _find_native_sonarqube()
+    if not sq_home or check:
+        return
+
+    _console.print(f"\n  Starting SonarQube on port {SONAR_PORT} (first start can take ~2 min)...")
+    host_url = f"http://localhost:{SONAR_PORT}"
+    try:
+        up = asyncio.run(start_and_wait(sq_home, port=SONAR_PORT, timeout=180))
+    except Exception as exc:
+        results.append((_LABEL_SONARQUBE_START, _SR_FAIL, str(exc)))
+        return
+
+    if not up:
+        results.append((_LABEL_SONARQUBE_START, _SR_WARN, "did not become UP within 3 min — try starting manually"))
+        return
+
+    results.append((_LABEL_SONARQUBE_START, _SR_OK, f"running at {host_url}"))
+    try:
+        token, token_reason = asyncio.run(ensure_admin_token(host_url))
+    except Exception as exc:
+        token, token_reason = None, str(exc)
+
+    if token:
+        tok_ok = persist_env_var("SONAR_TOKEN", token)
+        url_ok = persist_env_var("SONAR_HOST_URL", host_url)
+        env_note = "saved to user environment" if (tok_ok and url_ok) else "shown below — save manually"
+        results.append(("Admin token", _SR_OK, env_note))
+        results.append(("SONAR_HOST_URL", _SR_OK, host_url))
+        _console.print(
+            "\n  [bold green]✔ SONAR_TOKEN[/bold green] and "
+            "[bold green]SONAR_HOST_URL[/bold green] have been written "
+            "to your user environment automatically."
+        )
+        _console.print("  Open a [bold]new[/bold] terminal window for them to take effect in future sessions.")
+        _console.print(f"\n  [dim]SONAR_TOKEN=[/dim][bold]{token}[/bold]")
+        _console.print(f"  [dim](Change the admin password at {host_url} when convenient.)[/dim]")
+    else:
+        results.append(("Admin token", _SR_WARN, token_reason))
+        persist_env_var("SONAR_HOST_URL", host_url)
+        results.append(("SONAR_HOST_URL", _SR_OK, f"{host_url} — saved to user environment"))
+        _console.print(f"\n  Generate a token at: [link]{host_url}/account/security[/link]")
+        _console.print(
+            "  Then run:\n"
+            "  [bold]sensitive-scanner setup --sonarqube[/bold]\n"
+            "  — or set it manually in a new terminal:\n"
+            '  [dim][Environment]::SetEnvironmentVariable("SONAR_TOKEN", "<your-token>", "User")[/dim]'
+        )
+
+
 @app.command()
 def setup(
     sonarqube: bool = typer.Option(
@@ -593,288 +841,30 @@ def setup(
     --all:              everything above.
     --check:            report current status without installing anything.
     """
-    import subprocess
-    import shutil
-
+    import sys as _sys
     from rich.table import Table
-    from rich.status import Status
-
-    from scanners.binary_manager import ensure_binary, is_installed
-    from scanners.sonarqube_manager import (
-        SONAR_PORT,
-        check_java,
-        ensure_sonar_scanner,
-        ensure_sonarqube,
-        ensure_admin_token,
-        persist_env_var,
-        sonar_scanner_installed,
-        sonarqube_installed,
-        start_and_wait,
-        _SQ_DIR,
-        _SCANNER_DIR,
-        _TEMURIN_URL,
-    )
-    from scanners.sonarqube_scanner import _find_native_sonarqube
+    from scanners.sonarqube_manager import _SQ_DIR
 
     do_sonarqube = sonarqube or all_deps
     do_spacy = spacy_nlp or all_deps
 
     _console.print("\n[bold]sensitive-scanner setup[/bold]\n")
-
-    # Ensure base directories exist regardless of flags
     (_SQ_DIR.parent / "bin").mkdir(parents=True, exist_ok=True)
 
-    # ── Results tracking ──────────────────────────────────────────────────────
-    results: list[tuple[str, str, str]] = []  # (component, status_emoji, note)
+    results: list[_SetupRow] = []
 
-    def _ok(component: str, note: str = "") -> None:
-        results.append((component, "[bold green]✅[/bold green]", note))
-
-    def _warn(component: str, note: str = "") -> None:
-        results.append((component, "[bold yellow]⚠ [/bold yellow]", note))
-
-    def _fail(component: str, note: str = "") -> None:
-        results.append((component, "[bold red]✗ [/bold red]", note))
-
-    def _skip(component: str, note: str = "") -> None:
-        results.append((component, "[dim]–[/dim]", note))
-
-    # ── 1. Python version ─────────────────────────────────────────────────────
-    import sys as _sys
+    # 1. Python version
     v = _sys.version_info
     if v >= (3, 11):
-        _ok("Python", f"{v.major}.{v.minor}.{v.micro}")
+        results.append(("Python", _SR_OK, f"{v.major}.{v.minor}.{v.micro}"))
     else:
-        _warn("Python", f"{v.major}.{v.minor} — 3.11+ recommended")
+        results.append(("Python", _SR_WARN, f"{v.major}.{v.minor} — 3.11+ recommended"))
 
-    # ── 2. Gitleaks ───────────────────────────────────────────────────────────
-    if check:
-        if is_installed("gitleaks"):
-            _ok("Gitleaks", "installed")
-        else:
-            _warn("Gitleaks", "not downloaded (auto-downloads on first scan)")
-    else:
-        if is_installed("gitleaks"):
-            _ok("Gitleaks", "already installed")
-        else:
-            with Status("Downloading Gitleaks...", console=_console):
-                try:
-                    path = asyncio.run(ensure_binary("gitleaks"))
-                    if path:
-                        _ok("Gitleaks", f"downloaded → {path}")
-                    else:
-                        _warn("Gitleaks", "no binary for this platform (uses system PATH)")
-                except Exception as exc:
-                    _fail("Gitleaks", f"download failed: {exc}")
+    _run_gitleaks_setup(check, results)
+    _run_semgrep_setup(check, results)
+    _run_spacy_setup(check, do_spacy, results)
+    _run_sonarqube_setup(check, do_sonarqube, non_interactive, results)
 
-    # ── 3. Semgrep ────────────────────────────────────────────────────────────
-    semgrep_path = shutil.which("semgrep")
-    if semgrep_path:
-        _ok("Semgrep", semgrep_path)
-    elif check:
-        _warn("Semgrep", "not found — run: pip install semgrep")
-    else:
-        with Status("Installing Semgrep via pip...", console=_console):
-            try:
-                r = subprocess.run(
-                    [_sys.executable, "-m", "pip", "install", "--quiet", "semgrep"],
-                    capture_output=True,
-                    text=True,
-                    timeout=300,
-                )
-                if r.returncode == 0:
-                    _ok("Semgrep", "installed")
-                else:
-                    _fail("Semgrep", r.stderr.strip().splitlines()[-1] if r.stderr.strip() else "pip failed")
-            except Exception as exc:
-                _fail("Semgrep", str(exc))
-
-    # ── 4. spaCy NLP (optional) ───────────────────────────────────────────────
-    if do_spacy:
-        spacy_ok = False
-        try:
-            import spacy as _spacy  # type: ignore
-            spacy_ok = True
-        except ImportError:
-            if check:
-                _warn("spaCy", "not installed — run: pip install spacy")
-            else:
-                with Status("Installing spaCy via pip...", console=_console):
-                    try:
-                        r = subprocess.run(
-                            [_sys.executable, "-m", "pip", "install", "--quiet", "spacy"],
-                            capture_output=True, text=True, timeout=300,
-                        )
-                        spacy_ok = r.returncode == 0
-                        if not spacy_ok:
-                            _fail("spaCy", "pip install failed")
-                    except Exception as exc:
-                        _fail("spaCy", str(exc))
-
-        if spacy_ok:
-            try:
-                import spacy as _spacy  # type: ignore  # re-import after install
-                _spacy.load("en_core_web_sm")
-                _ok("spaCy", "en_core_web_sm ready")
-            except OSError:
-                if check:
-                    _warn("spaCy", "installed but en_core_web_sm model missing")
-                else:
-                    with Status("Downloading en_core_web_sm model...", console=_console):
-                        try:
-                            r = subprocess.run(
-                                [_sys.executable, "-m", "spacy", "download", "en_core_web_sm"],
-                                capture_output=True, text=True, timeout=300,
-                            )
-                            if r.returncode == 0:
-                                _ok("spaCy", "en_core_web_sm downloaded")
-                            else:
-                                _fail("spaCy", "model download failed")
-                        except Exception as exc:
-                            _fail("spaCy", str(exc))
-    else:
-        try:
-            import spacy as _spacy  # type: ignore
-            try:
-                _spacy.load("en_core_web_sm")
-                _ok("spaCy", "en_core_web_sm ready")
-            except OSError:
-                _warn("spaCy", "model missing — run: sensitive-scanner setup --spacy")
-        except ImportError:
-            _skip("spaCy", "optional — add --spacy to install")
-
-    # ── 5. SonarQube (optional) ───────────────────────────────────────────────
-    if do_sonarqube:
-        # 5a. Java prerequisite
-        java_ok, java_msg = check_java()
-        if not java_ok:
-            _fail("Java 17+", java_msg)
-            _skip("sonar-scanner-cli", "skipped — Java required")
-            _skip(_LABEL_SONARQUBE_CE, "skipped — Java required")
-        else:
-            _ok("Java 17+", java_msg)
-
-            # 5b. sonar-scanner-cli
-            if sonar_scanner_installed():
-                _ok("sonar-scanner-cli", f"{_SCANNER_DIR}")
-            elif check:
-                _warn("sonar-scanner-cli", "not installed")
-            else:
-                with Status(
-                    "Downloading sonar-scanner-cli...", console=_console
-                ):
-                    try:
-                        path = asyncio.run(ensure_sonar_scanner())
-                        if path:
-                            _ok("sonar-scanner-cli", f"installed → {path}")
-                        else:
-                            _fail("sonar-scanner-cli", "download failed")
-                    except Exception as exc:
-                        _fail("sonar-scanner-cli", str(exc))
-
-            # 5c. SonarQube CE
-            sq_already = bool(_find_native_sonarqube())
-            if sq_already:
-                sq_home = _find_native_sonarqube()
-                # Ensure port is patched even on pre-existing installs
-                if not check:
-                    from scanners.sonarqube_manager import patch_sonar_port
-                    patch_sonar_port(sq_home)
-                _ok(_LABEL_SONARQUBE_CE, f"port {SONAR_PORT} — {sq_home}")
-            elif check:
-                _warn(_LABEL_SONARQUBE_CE, "not installed")
-            else:
-                if not non_interactive:
-                    _console.print(
-                        f"\n  [dim]SonarQube CE is ~500 MB.  Downloading to "
-                        f"{_SQ_DIR}[/dim]"
-                    )
-                with Status(
-                    "Downloading SonarQube CE (~500 MB, this may take a few minutes)...",
-                    console=_console,
-                ):
-                    try:
-                        path = asyncio.run(ensure_sonarqube())
-                        if path:
-                            _ok(_LABEL_SONARQUBE_CE, f"port {SONAR_PORT} — {path}")
-                        else:
-                            _fail(_LABEL_SONARQUBE_CE, "download failed — check internet connection")
-                    except Exception as exc:
-                        _fail(_LABEL_SONARQUBE_CE, str(exc))
-
-            # 5d. Start SonarQube + token (only when we just installed or on explicit request)
-            sq_home = _find_native_sonarqube()
-            if sq_home and not check:
-                _console.print(
-                    f"\n  Starting SonarQube on port {SONAR_PORT} "
-                    f"(first start can take ~2 min)..."
-                )
-                host_url = f"http://localhost:{SONAR_PORT}"
-                try:
-                    up = asyncio.run(start_and_wait(sq_home, port=SONAR_PORT, timeout=180))
-                except Exception as exc:
-                    up = False
-                    _fail(_LABEL_SONARQUBE_START, str(exc))
-
-                if up:
-                    _ok(_LABEL_SONARQUBE_START, f"running at {host_url}")
-                    # 5e. Auto-create token
-                    try:
-                        token, token_reason = asyncio.run(ensure_admin_token(host_url))
-                    except Exception as exc:
-                        token, token_reason = None, str(exc)
-
-                    if token:
-                        # Persist both variables as permanent user env vars
-                        tok_ok = persist_env_var("SONAR_TOKEN", token)
-                        url_ok = persist_env_var("SONAR_HOST_URL", host_url)
-                        env_note = "saved to user environment" if (tok_ok and url_ok) else "shown below — save manually"
-                        _ok("Admin token", env_note)
-                        _ok("SONAR_HOST_URL", host_url)
-                        _console.print(
-                            "\n  [bold green]✔ SONAR_TOKEN[/bold green] and "
-                            "[bold green]SONAR_HOST_URL[/bold green] have been written "
-                            "to your user environment automatically."
-                        )
-                        _console.print(
-                            "  Open a [bold]new[/bold] terminal window for them to "
-                            "take effect in future sessions."
-                        )
-                        _console.print(
-                            f"\n  [dim]SONAR_TOKEN=[/dim][bold]{token}[/bold]"
-                        )
-                        _console.print(
-                            f"  [dim](Change the admin password at {host_url} when convenient.)[/dim]"
-                        )
-                    else:
-                        _warn(
-                            "Admin token",
-                            token_reason,
-                        )
-                        # Still persist SONAR_HOST_URL even without a token
-                        persist_env_var("SONAR_HOST_URL", host_url)
-                        _ok("SONAR_HOST_URL", f"{host_url} — saved to user environment")
-                        _console.print(
-                            f"\n  Generate a token at: "
-                            f"[link]{host_url}/account/security[/link]"
-                        )
-                        _console.print(
-                            "  Then run:\n"
-                            "  [bold]sensitive-scanner setup --sonarqube[/bold]\n"
-                            "  — or set it manually in a new terminal:\n"
-                            "  [dim][Environment]::SetEnvironmentVariable"
-                            '("SONAR_TOKEN", "<your-token>", "User")[/dim]'
-                        )
-                else:
-                    _warn(_LABEL_SONARQUBE_START, "did not become UP within 3 min — try starting manually")
-    else:
-        sq_home = _find_native_sonarqube()
-        if sq_home:
-            _ok(_LABEL_SONARQUBE_CE, f"installed at {sq_home}")
-        else:
-            _skip(_LABEL_SONARQUBE_CE, "optional — add --sonarqube to auto-download")
-
-    # ── Summary table ─────────────────────────────────────────────────────────
     _console.print()
     table = Table(show_header=True, header_style="bold", box=None, padding=(0, 2))
     table.add_column("Component")

@@ -343,6 +343,25 @@ class SonarQubeScanner(AbstractScanner):
     def _compose_cmd(runtime: str) -> list[str]:
         return [runtime, "compose"]
 
+    async def _ensure_server_running(self, host: str) -> bool:
+        """Return True if server is reachable, auto-starting it if needed."""
+        if await self._is_ready(host):
+            return True
+        sq_home = _find_native_sonarqube()
+        if sq_home and shutil.which("java"):
+            print("[sonarqube] Server not running — auto-starting native Java SonarQube...", file=sys.stderr)
+            return await self._start_native(sq_home)
+        runtime = detect_container_runtime()
+        if runtime:
+            print("[sonarqube] No native Java install found — auto-starting via Docker...", file=sys.stderr)
+            return await self._start_docker(runtime)
+        print(
+            f"[sonarqube] Server at {host} is not reachable and no native Java install "
+            "or container runtime was found.",
+            file=sys.stderr,
+        )
+        return False
+
     async def _run(self, config: ScanConfig) -> list[Finding]:
         host = config.sonar_host_url or _resolve_host_url()
         token = config.sonar_token or os.environ.get("SONAR_TOKEN", "")
@@ -353,26 +372,8 @@ class SonarQubeScanner(AbstractScanner):
             print("[sonarqube] SONAR_TOKEN not set — skipping SonarQube scan.", file=sys.stderr)
             return []
 
-        # Ensure server is reachable — auto-start (native Java preferred) if not
-        if not await self._is_ready(host):
-            sq_home = _find_native_sonarqube()
-            if sq_home and shutil.which("java"):
-                print("[sonarqube] Server not running — auto-starting native Java SonarQube...", file=sys.stderr)
-                if not await self._start_native(sq_home):
-                    return []
-            else:
-                runtime = detect_container_runtime()
-                if runtime:
-                    print("[sonarqube] No native Java install found — auto-starting via Docker...", file=sys.stderr)
-                    if not await self._start_docker(runtime):
-                        return []
-                else:
-                    print(
-                        f"[sonarqube] Server at {host} is not reachable and no native Java install "
-                        "or container runtime was found.",
-                        file=sys.stderr,
-                    )
-                    return []
+        if not await self._ensure_server_running(host):
+            return []
 
         # Create project if it doesn't already exist
         await self._ensure_project(host, token, project_key, config.project_name)
@@ -555,6 +556,60 @@ class SonarQubeScanner(AbstractScanner):
 
         return findings
 
+    @staticmethod
+    def _normalise_hotspot(
+        hs: dict, project_key: str, base_path: str, show_secrets: bool
+    ) -> Optional["Finding"]:
+        """Convert a raw hotspot dict from the API into a Finding, or None to skip."""
+        _HOTSPOT_SEVERITY = {"HIGH": "critical", "MEDIUM": "high", "LOW": "medium"}
+        _PROB_CONF = {"HIGH": 0.82, "MEDIUM": 0.65, "LOW": 0.48}
+
+        component: str = hs.get("component", "")
+        file_rel = component.replace(f"{project_key}:", "", 1) if ":" in component else component
+        text_range: dict = hs.get("textRange", {})
+        line: int = text_range.get("startLine", 0) or 0
+        rule_id: str = hs.get("ruleKey", "security_hotspot")
+        raw_message: str = hs.get("message", "")
+        prob: str = hs.get("vulnerabilityProbability", "MEDIUM").upper()
+        severity = _HOTSPOT_SEVERITY.get(prob, "high")
+        sonar_sec_cat: str = hs.get("securityCategory", "").lower()
+
+        if sonar_sec_cat and sonar_sec_cat in _SONAR_SECURITY_CATEGORY_MAP:
+            category = _SONAR_SECURITY_CATEGORY_MAP[sonar_sec_cat]
+            rule = _ENGINE.lookup(category)
+        else:
+            category, rule = _ENGINE.resolve(rule_id)
+
+        if category == "generic_secret":
+            return None
+
+        if rule:
+            severity = rule.severity
+
+        confidence = _PROB_CONF.get(prob, 0.65)
+        sec_label = sonar_sec_cat.replace("-", " ").title() if sonar_sec_cat else "Security Hotspot"
+        message = (
+            f"[{sec_label}] {raw_message}" if raw_message
+            else f"[{sec_label}] Security hotspot — review required"
+        )
+        match = SonarQubeScanner._source_line(base_path, file_rel, line) if show_secrets else "****"
+
+        return Finding(
+            id=Finding.make_id(file_rel, line, rule_id),
+            scanners=["sonarqube"],
+            category=category,
+            severity=severity,
+            confidence=confidence,
+            file=file_rel,
+            line=line,
+            match=match,
+            rule_id=rule_id,
+            message=message,
+            remediation_description=rule.description if rule else "",
+            fix_steps=rule.fix_steps if rule else [],
+            references=rule.references if rule else [],
+        )
+
     async def _fetch_hotspots(
         self, host: str, token: str, project_key: str, base_path: str,
         show_secrets: bool = False,
@@ -563,7 +618,6 @@ class SonarQubeScanner(AbstractScanner):
         findings: list[Finding] = []
         page = 1
         page_size = 500
-        _HOTSPOT_SEVERITY = {"HIGH": "critical", "MEDIUM": "high", "LOW": "medium"}
 
         async with httpx.AsyncClient(timeout=30) as client:
             while True:
@@ -571,7 +625,7 @@ class SonarQubeScanner(AbstractScanner):
                     resp = await client.get(
                         urljoin(host, "/api/hotspots/search"),
                         params={
-                            "project": project_key,   # 'projectKey' deprecated since SQ 10.2
+                            "project": project_key,
                             "status": "TO_REVIEW",
                             "ps": page_size,
                             "p": page,
@@ -585,58 +639,9 @@ class SonarQubeScanner(AbstractScanner):
                     break
 
                 for hs in data.get("hotspots", []):
-                    component: str = hs.get("component", "")
-                    file_rel = component.replace(f"{project_key}:", "", 1) if ":" in component else component
-                    text_range: dict = hs.get("textRange", {})
-                    line: int = text_range.get("startLine", 0) or 0
-                    rule_id: str = hs.get("ruleKey", "security_hotspot")
-                    raw_message: str = hs.get("message", "")
-                    prob: str = hs.get("vulnerabilityProbability", "MEDIUM").upper()
-                    severity = _HOTSPOT_SEVERITY.get(prob, "high")
-                    sonar_sec_cat: str = hs.get("securityCategory", "").lower()
-
-                    # securityCategory is the most reliable signal for hotspots;
-                    # fall back to rule_id keyword heuristics
-                    if sonar_sec_cat and sonar_sec_cat in _SONAR_SECURITY_CATEGORY_MAP:
-                        category = _SONAR_SECURITY_CATEGORY_MAP[sonar_sec_cat]
-                        rule = _ENGINE.lookup(category)
-                    else:
-                        category, rule = _ENGINE.resolve(rule_id)
-
-                    # Drop hotspots with no meaningful PII/secret category —
-                    # injection-type, CSRF, DoS etc. are not actionable here.
-                    if category == "generic_secret":
-                        continue
-
-                    if rule:
-                        severity = rule.severity
-
-                    _PROB_CONF = {"HIGH": 0.82, "MEDIUM": 0.65, "LOW": 0.48}
-                    confidence = _PROB_CONF.get(prob, 0.65)
-
-                    # Build an informative message prefixed with the SQ category
-                    sec_label = sonar_sec_cat.replace("-", " ").title() if sonar_sec_cat else "Security Hotspot"
-                    message = (
-                        f"[{sec_label}] {raw_message}"
-                        if raw_message
-                        else f"[{sec_label}] Security hotspot — review required"
-                    )
-
-                    findings.append(Finding(
-                        id=Finding.make_id(file_rel, line, rule_id),
-                        scanners=["sonarqube"],
-                        category=category,
-                        severity=severity,
-                        confidence=confidence,
-                        file=file_rel,
-                        line=line,
-                        match=self._source_line(base_path, file_rel, line) if show_secrets else "****",
-                        rule_id=rule_id,
-                        message=message,
-                        remediation_description=rule.description if rule else "",
-                        fix_steps=rule.fix_steps if rule else [],
-                        references=rule.references if rule else [],
-                    ))
+                    f = self._normalise_hotspot(hs, project_key, base_path, show_secrets)
+                    if f:
+                        findings.append(f)
 
                 paging = data.get("paging", {})
                 if page * page_size >= paging.get("total", 0):

@@ -84,6 +84,33 @@ def _save_meta(meta: dict) -> None:
 
 # ── Persistent environment-variable helper ────────────────────────────────────
 
+def _persist_unix_env_var(name: str, value: str) -> bool:
+    """Append or update ``export NAME=value`` in all existing shell profile files."""
+    export_line = f'export {name}="{value}"'
+    written = False
+    for rc in (
+        Path.home() / ".bashrc",
+        Path.home() / ".zshrc",
+        Path.home() / ".profile",
+    ):
+        if rc.exists():
+            content = rc.read_text(encoding="utf-8")
+            if f"export {name}=" in content:
+                import re as _re
+                content = _re.sub(
+                    rf'^export {re.escape(name)}=.*$',
+                    export_line,
+                    content,
+                    flags=re.MULTILINE,
+                )
+                rc.write_text(content, encoding="utf-8")
+            else:
+                with rc.open("a", encoding="utf-8") as fh:
+                    fh.write(f"\n# Added by sensitive-scanner setup\n{export_line}\n")
+            written = True
+    return written
+
+
 def persist_env_var(name: str, value: str) -> bool:
     """
     Write a persistent user-level environment variable so it survives
@@ -127,31 +154,7 @@ def persist_env_var(name: str, value: str) -> bool:
                   file=sys.stderr)
             return False
     else:
-        # Append to shell profiles that already exist
-        export_line = f'export {name}="{value}"'
-        written = False
-        for rc in (
-            Path.home() / ".bashrc",
-            Path.home() / ".zshrc",
-            Path.home() / ".profile",
-        ):
-            if rc.exists():
-                content = rc.read_text(encoding="utf-8")
-                # Replace existing export if present, otherwise append
-                if f"export {name}=" in content:
-                    import re as _re
-                    content = _re.sub(
-                        rf'^export {re.escape(name)}=.*$',
-                        export_line,
-                        content,
-                        flags=re.MULTILINE,
-                    )
-                    rc.write_text(content, encoding="utf-8")
-                else:
-                    with rc.open("a", encoding="utf-8") as fh:
-                        fh.write(f"\n# Added by sensitive-scanner setup\n{export_line}\n")
-                written = True
-        return written
+        return _persist_unix_env_var(name, value)
 
 
 # ── Java prerequisite check ───────────────────────────────────────────────────

@@ -226,42 +226,27 @@ async def get_remediation(finding_id: str) -> str:
     return "\n".join(lines)
 
 
-@mcp.tool()
-async def check_scanner_status(start_sonarqube: bool = False) -> str:
-    """
-    Check which scanner backends are available in the current environment.
-
-    Reports on: managed binaries (Gitleaks, Semgrep), container runtime
-    (Docker/Podman), SonarQube reachability, and spaCy NLP model.
-    Optionally starts the SonarQube Docker Compose stack.
-
-    Args:
-        start_sonarqube: If True and a container runtime is present, start the
-                         SonarQube Docker Compose stack and wait for it to be ready.
-
-    Returns:
-        A status table showing which scanners are ready and the active tier.
-    """
-    lines: list[str] = ["## Scanner Status\n"]
-
-    # Managed binaries
+def _binary_status_lines() -> list[str]:
+    """Return status lines for managed and system-PATH binaries."""
+    lines: list[str] = []
     for name in SPECS:
         ok = is_installed(name)
         status = "✅ installed" if ok else "⬇️  not downloaded (will auto-download on first scan)"
         lines.append(f"- **{name}**: {status}")
-
-    # System PATH binaries
     for tool in ("gitleaks", "semgrep", "docker", "podman", "sonar-scanner"):
         found = shutil.which(tool)
         if found:
             lines.append(f"- **{tool}** (system): ✅ `{found}`")
+    return lines
 
-    # Native Java SonarQube
-    lines.append("")
-    sq_home = _find_native_sonarqube()
-    java = shutil.which("java")
+
+def _native_sonarqube_lines(sq_home: str | None, java: str | None) -> list[str]:
+    """Return status lines for native Java SonarQube install."""
+    lines: list[str] = [""]
     if sq_home and java:
-        lines.append(f"**Native SonarQube:** ✅ found at `{sq_home}` (java: `{java}`) — Tier 2 available without Docker")
+        lines.append(
+            f"**Native SonarQube:** ✅ found at `{sq_home}` (java: `{java}`) — Tier 2 available without Docker"
+        )
         native_scanner = _find_sonar_scanner()
         if native_scanner:
             lines.append(f"**sonar-scanner CLI:** ✅ `{native_scanner}`")
@@ -281,65 +266,97 @@ async def check_scanner_status(start_sonarqube: bool = False) -> str:
             "**Native SonarQube:** ℹ️  not found — to use without Docker, extract the "
             "SonarQube CE zip to `~/.sensitive-scanner/sonarqube/` or set `SONARQUBE_HOME`"
         )
-
-    # Container runtime
     runtime = shutil.which("docker") or shutil.which("podman")
     if runtime:
         rt_name = Path(runtime).name
         lines.append(f"**Container runtime:** ✅ `{rt_name}` found — Docker-based Tier 2 also available")
     else:
         lines.append("**Container runtime:** ℹ️  not found (not required if native SonarQube is installed)")
+    return lines
 
-    # spaCy NLP
+
+def _spacy_status_lines() -> list[str]:
+    """Return status lines for the spaCy NLP model."""
     try:
         import spacy  # type: ignore
         try:
             spacy.load("en_core_web_sm")
-            lines.append("**spaCy NLP (unstructured PII):** ✅ en_core_web_sm loaded")
+            return ["**spaCy NLP (unstructured PII):** ✅ en_core_web_sm loaded"]
         except OSError:
-            lines.append(
+            return [
                 "**spaCy NLP:** ⚠️  spaCy installed but model missing — "
                 "run `python -m spacy download en_core_web_sm`"
-            )
+            ]
     except ImportError:
-        lines.append(
+        return [
             "**spaCy NLP:** ℹ️  not installed (optional) — "
             "run `pip install spacy && python -m spacy download en_core_web_sm`"
-        )
+        ]
 
-    # SonarQube
-    sq = SonarQubeScanner()
+
+async def _sonarqube_status_lines(
+    sq: SonarQubeScanner,
+    sq_home: str | None,
+    java: str | None,
+    runtime: str | None,
+    start_sonarqube: bool,
+) -> list[str]:
+    """Return status lines for SonarQube reachability / startup."""
+    sq_port = _read_sonar_port(sq_home) if sq_home else 9000
+    sq_url = f"http://localhost:{sq_port}"
     if start_sonarqube:
         native_available = bool(sq_home and java)
         docker_available = bool(runtime)
         if not native_available and not docker_available:
-            lines.append("\n**SonarQube:** ❌ cannot start — no native install or container runtime found")
-        else:
-            mode = "native Java" if native_available else "Docker"
-            lines.append(f"\n**Starting SonarQube ({mode})...** (this may take up to 90 seconds)")
-            ok = await sq.start_sonarqube()
-            sq_port = _read_sonar_port(sq_home) if sq_home else 9000
-            sq_url = f"http://localhost:{sq_port}"
-            lines.append(
+            return ["\n**SonarQube:** ❌ cannot start — no native install or container runtime found"]
+        mode = "native Java" if native_available else "Docker"
+        ok = await sq.start_sonarqube()
+        return [
+            f"\n**Starting SonarQube ({mode})...** (this may take up to 90 seconds)",
+            (
                 f"**SonarQube:** ✅ ready at {sq_url}"
                 if ok
                 else "**SonarQube:** ❌ failed to start — check installation or `docker/docker-compose.yml`"
-            )
-    else:
-        sq_port = _read_sonar_port(sq_home) if sq_home else 9000
-        sq_url = f"http://localhost:{sq_port}"
-        ready = await sq._is_ready(sq_url)  # noqa: SLF001
-        if ready:
-            lines.append(f"**SonarQube:** ✅ running at {sq_url}")
-        elif sq_home or runtime:
-            lines.append(
-                "**SonarQube:** ⏸ not running — "
-                "call `check_scanner_status(start_sonarqube=True)` to start it"
-            )
-        else:
-            lines.append("**SonarQube:** ℹ️  install SonarQube CE or Docker/Podman to enable Tier 2")
+            ),
+        ]
+    ready = await sq._is_ready(sq_url)  # noqa: SLF001
+    if ready:
+        return [f"**SonarQube:** ✅ running at {sq_url}"]
+    if sq_home or runtime:
+        return [
+            "**SonarQube:** ⏸ not running — "
+            "call `check_scanner_status(start_sonarqube=True)` to start it"
+        ]
+    return ["**SonarQube:** ℹ️  install SonarQube CE or Docker/Podman to enable Tier 2"]
 
-    # Active tier summary
+
+@mcp.tool()
+async def check_scanner_status(start_sonarqube: bool = False) -> str:
+    """
+    Check which scanner backends are available in the current environment.
+
+    Reports on: managed binaries (Gitleaks, Semgrep), container runtime
+    (Docker/Podman), SonarQube reachability, and spaCy NLP model.
+    Optionally starts the SonarQube Docker Compose stack.
+
+    Args:
+        start_sonarqube: If True and a container runtime is present, start the
+                         SonarQube Docker Compose stack and wait for it to be ready.
+
+    Returns:
+        A status table showing which scanners are ready and the active tier.
+    """
+    sq_home = _find_native_sonarqube()
+    java = shutil.which("java")
+    runtime = shutil.which("docker") or shutil.which("podman")
+    sq = SonarQubeScanner()
+
+    lines: list[str] = ["## Scanner Status\n"]
+    lines += _binary_status_lines()
+    lines += _native_sonarqube_lines(sq_home, java)
+    lines += _spacy_status_lines()
+    lines += await _sonarqube_status_lines(sq, sq_home, java, runtime, start_sonarqube)
+
     tier = 1
     if (sq_home and java) or runtime:
         tier = 2

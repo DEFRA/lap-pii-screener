@@ -120,29 +120,111 @@ async def _fetch_release_info(spec: BinarySpec) -> Optional[dict]:
         return None
 
 
+def _find_in_zip(archive_path: Path, exe: str, dest: Path) -> bool:
+    """Extract *exe* from a zip archive at *archive_path* into *dest*."""
+    with zipfile.ZipFile(archive_path) as zf:
+        for member in zf.namelist():
+            if Path(member).name == exe:
+                data = zf.read(member)
+                dest.write_bytes(data)
+                return True
+    return False
+
+
+def _find_in_tar(archive_path: Path, exe: str, dest: Path) -> bool:
+    """Extract *exe* from a tar archive at *archive_path* into *dest*."""
+    with tarfile.open(archive_path) as tf:
+        for member in tf.getmembers():
+            if Path(member.name).name == exe:
+                f = tf.extractfile(member)
+                if f:
+                    dest.write_bytes(f.read())
+                    return True
+    return False
+
+
 def _extract_binary(archive_path: Path, binary_name: str, dest: Path) -> bool:
     """Extract the binary from a zip or tar.gz archive into dest."""
     suffix = _system()
     exe = binary_name + (".exe" if suffix == "windows" else "")
     try:
         if archive_path.suffix == ".zip" or archive_path.name.endswith(".zip"):
-            with zipfile.ZipFile(archive_path) as zf:
-                for member in zf.namelist():
-                    if Path(member).name == exe:
-                        data = zf.read(member)
-                        dest.write_bytes(data)
-                        return True
-        else:
-            with tarfile.open(archive_path) as tf:
-                for member in tf.getmembers():
-                    if Path(member.name).name == exe:
-                        f = tf.extractfile(member)
-                        if f:
-                            dest.write_bytes(f.read())
-                            return True
+            return _find_in_zip(archive_path, exe, dest)
+        return _find_in_tar(archive_path, exe, dest)
     except (zipfile.BadZipFile, tarfile.TarError, OSError, KeyError) as exc:
         print(f"[binary_manager] Extraction failed for {archive_path}: {exc}", file=sys.stderr)
     return False
+
+
+def _resolve_download_url(
+    release: dict, spec: "BinarySpec", version: str
+) -> tuple[Optional[str], Optional[str], str]:
+    """Return (download_url, checksum_url, asset_name) for the current platform, or (None, None, '') on failure."""
+    sys_key = (_system(), _machine())
+    pattern = spec.asset_patterns.get(sys_key)
+    if not pattern:
+        print(
+            f"[binary_manager] No asset pattern for {spec.name} on {sys_key}",
+            file=sys.stderr,
+        )
+        return None, None, ""
+
+    asset_name = pattern.replace("{ver}", version)
+    download_url: Optional[str] = None
+    checksum_url: Optional[str] = None
+
+    for asset in release.get("assets", []):
+        n = asset["name"]
+        if n == asset_name:
+            download_url = asset["browser_download_url"]
+        if n in (f"{asset_name}.sha256", "checksums.txt"):
+            checksum_url = asset["browser_download_url"]
+
+    return download_url, checksum_url, asset_name
+
+
+async def _download_to_temp(download_url: str, asset_name: str, name: str, version: str) -> Optional[Path]:
+    """Stream *download_url* to a temp file and return its path, or None on error."""
+    with tempfile.NamedTemporaryFile(delete=False, suffix=Path(asset_name).suffix) as tmp:
+        tmp_path = Path(tmp.name)
+    try:
+        async with httpx.AsyncClient(timeout=120, follow_redirects=True) as client:
+            print(f"[binary_manager] Downloading {name} {version}...", file=sys.stderr)
+            async with client.stream("GET", download_url) as resp:
+                resp.raise_for_status()
+                with open(tmp_path, "wb") as fh:
+                    async for chunk in resp.aiter_bytes(chunk_size=65536):
+                        fh.write(chunk)
+    except (httpx.HTTPError, OSError) as exc:
+        print(f"[binary_manager] Download failed for {name}: {exc}", file=sys.stderr)
+        tmp_path.unlink(missing_ok=True)
+        return None
+    return tmp_path
+
+
+async def _verify_checksum(tmp_path: Path, checksum_url: str, asset_name: str, name: str) -> bool:
+    """Return True if checksum matches (or verification is skipped due to error)."""
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            cs_resp = await client.get(checksum_url)
+            cs_resp.raise_for_status()
+            expected_hash = None
+            for line in cs_resp.text.splitlines():
+                parts = line.split()
+                if len(parts) >= 2 and parts[-1].endswith(asset_name):
+                    expected_hash = parts[0]
+                    break
+            if expected_hash:
+                actual_hash = hashlib.sha256(tmp_path.read_bytes()).hexdigest()
+                if actual_hash != expected_hash:
+                    print(
+                        f"[binary_manager] Checksum mismatch for {name}. Aborting install.",
+                        file=sys.stderr,
+                    )
+                    return False
+    except (OSError, ValueError, httpx.HTTPError) as exc:
+        print(f"[binary_manager] Checksum verification skipped: {exc}", file=sys.stderr)
+    return True
 
 
 async def ensure_binary(name: str) -> Optional[Path]:
@@ -164,78 +246,29 @@ async def ensure_binary(name: str) -> Optional[Path]:
         return None
 
     version: str = release.get("tag_name", "").lstrip("v")
-    sys_key = (_system(), _machine())
-    pattern = spec.asset_patterns.get(sys_key)
-    if not pattern:
-        print(
-            f"[binary_manager] No asset pattern for {name} on {sys_key}",
-            file=sys.stderr,
-        )
-        return None
-
-    asset_name = pattern.replace("{ver}", version)
-    download_url: Optional[str] = None
-    checksum_url: Optional[str] = None
-
-    for asset in release.get("assets", []):
-        n = asset["name"]
-        if n == asset_name:
-            download_url = asset["browser_download_url"]
-        if n in (f"{asset_name}.sha256", "checksums.txt"):
-            checksum_url = asset["browser_download_url"]
-
+    download_url, checksum_url, asset_name = _resolve_download_url(release, spec, version)
     if not download_url:
-        print(f"[binary_manager] Asset '{asset_name}' not found in release", file=sys.stderr)
+        print(f"[binary_manager] Asset not found in release for {name}", file=sys.stderr)
         return None
 
     BIN_DIR.mkdir(parents=True, exist_ok=True)
-
-    with tempfile.NamedTemporaryFile(delete=False, suffix=Path(asset_name).suffix) as tmp:
-        tmp_path = Path(tmp.name)
+    tmp_path = await _download_to_temp(download_url, asset_name, name, version)
+    if not tmp_path:
+        return None
 
     try:
-        async with httpx.AsyncClient(timeout=120, follow_redirects=True) as client:
-            print(f"[binary_manager] Downloading {name} {version}...", file=sys.stderr)
-            async with client.stream("GET", download_url) as resp:
-                resp.raise_for_status()
-                with open(tmp_path, "wb") as fh:
-                    async for chunk in resp.aiter_bytes(chunk_size=65536):
-                        fh.write(chunk)
-
-        # Verify SHA-256 checksum if available
         if checksum_url:
-            try:
-                async with httpx.AsyncClient(timeout=15) as client:
-                    cs_resp = await client.get(checksum_url)
-                    cs_resp.raise_for_status()
-                    expected_hash = None
-                    for line in cs_resp.text.splitlines():
-                        parts = line.split()
-                        if len(parts) >= 2 and parts[-1].endswith(asset_name):
-                            expected_hash = parts[0]
-                            break
-                    if expected_hash:
-                        actual_hash = hashlib.sha256(tmp_path.read_bytes()).hexdigest()
-                        if actual_hash != expected_hash:
-                            print(
-                                f"[binary_manager] Checksum mismatch for {name}. "
-                                "Aborting install.",
-                                file=sys.stderr,
-                            )
-                            return None
-            except (OSError, ValueError, httpx.HTTPError) as exc:
-                print(f"[binary_manager] Checksum verification skipped: {exc}", file=sys.stderr)
+            if not await _verify_checksum(tmp_path, checksum_url, asset_name, name):
+                return None
 
         dest = binary_path(name)
         if not _extract_binary(tmp_path, spec.exe_name or name, dest):
             print(f"[binary_manager] Could not extract {name} from archive", file=sys.stderr)
             return None
 
-        # Make executable on Unix
         if _system() != "windows":
             dest.chmod(dest.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
-        # Persist version metadata
         meta = _load_meta()
         meta[name] = {"version": version}
         _save_meta(meta)
