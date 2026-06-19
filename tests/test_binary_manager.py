@@ -226,13 +226,13 @@ class TestResolveDownloadUrl:
         spec = bm.SPECS["gitleaks"]
         release = {
             "assets": [
-                {"name": "gitleaks_8.0.0_linux_x64.tar.gz", "browser_download_url": "http://dl/bin"},
-                {"name": "checksums.txt", "browser_download_url": "http://dl/cs"},
+                {"name": "gitleaks_8.0.0_linux_x64.tar.gz", "browser_download_url": "https://dl/bin"},
+                {"name": "checksums.txt", "browser_download_url": "https://dl/cs"},
             ]
         }
         dl, cs, asset = bm._resolve_download_url(release, spec, "8.0.0")
-        assert dl == "http://dl/bin"
-        assert cs == "http://dl/cs"
+        assert dl == "https://dl/bin"
+        assert cs == "https://dl/cs"
         assert asset == "gitleaks_8.0.0_linux_x64.tar.gz"
 
     def test_no_pattern_for_platform(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -249,13 +249,13 @@ class TestResolveDownloadUrl:
         asset_name = "gitleaks_8.0.0_linux_x64.tar.gz"
         release = {
             "assets": [
-                {"name": asset_name, "browser_download_url": "http://dl/bin"},
-                {"name": f"{asset_name}.sha256", "browser_download_url": "http://dl/cs256"},
+                {"name": asset_name, "browser_download_url": "https://dl/bin"},
+                {"name": f"{asset_name}.sha256", "browser_download_url": "https://dl/cs256"},
             ]
         }
         dl, cs, asset = bm._resolve_download_url(release, spec, "8.0.0")
-        assert dl == "http://dl/bin"
-        assert cs == "http://dl/cs256"
+        assert dl == "https://dl/bin"
+        assert cs == "https://dl/cs256"
 
 
 # --------------------------------------------------------------------------- #
@@ -289,7 +289,7 @@ class TestDownloadToTemp:
     async def test_success_writes_bytes(self) -> None:
         client = _stream_client([b"abc", b"def"])
         with patch.object(bm.httpx, "AsyncClient", return_value=client):
-            path = await bm._download_to_temp("http://dl/bin", "bin.tar.gz", "gitleaks", "8.0.0")
+            path = await bm._download_to_temp("https://dl/bin", "bin.tar.gz", "gitleaks", "8.0.0")
         assert path is not None
         assert path.read_bytes() == b"abcdef"
         path.unlink(missing_ok=True)
@@ -297,7 +297,7 @@ class TestDownloadToTemp:
     @pytest.mark.asyncio
     async def test_download_error_returns_none(self) -> None:
         with patch.object(bm.httpx, "AsyncClient", side_effect=httpx.HTTPError("net")):
-            path = await bm._download_to_temp("http://dl/bin", "bin.tar.gz", "gitleaks", "8.0.0")
+            path = await bm._download_to_temp("https://dl/bin", "bin.tar.gz", "gitleaks", "8.0.0")
         assert path is None
 
 
@@ -317,7 +317,7 @@ class TestVerifyChecksum:
         resp.text = f"{digest}  myasset.tar.gz"
         client = _async_client(resp)
         with patch.object(bm.httpx, "AsyncClient", return_value=client):
-            ok = await bm._verify_checksum(f, "http://cs", "myasset.tar.gz", "gitleaks")
+            ok = await bm._verify_checksum(f, "https://cs", "myasset.tar.gz", "gitleaks")
         assert ok is True
 
     @pytest.mark.asyncio
@@ -329,7 +329,7 @@ class TestVerifyChecksum:
         resp.text = "deadbeef  myasset.tar.gz"
         client = _async_client(resp)
         with patch.object(bm.httpx, "AsyncClient", return_value=client):
-            ok = await bm._verify_checksum(f, "http://cs", "myasset.tar.gz", "gitleaks")
+            ok = await bm._verify_checksum(f, "https://cs", "myasset.tar.gz", "gitleaks")
         assert ok is False
 
     @pytest.mark.asyncio
@@ -341,7 +341,7 @@ class TestVerifyChecksum:
         resp.text = "abc  other.tar.gz"
         client = _async_client(resp)
         with patch.object(bm.httpx, "AsyncClient", return_value=client):
-            ok = await bm._verify_checksum(f, "http://cs", "myasset.tar.gz", "gitleaks")
+            ok = await bm._verify_checksum(f, "https://cs", "myasset.tar.gz", "gitleaks")
         assert ok is True
 
     @pytest.mark.asyncio
@@ -349,7 +349,7 @@ class TestVerifyChecksum:
         f = tmp_path / "bin"
         f.write_bytes(b"payload")
         with patch.object(bm.httpx, "AsyncClient", side_effect=httpx.HTTPError("net")):
-            ok = await bm._verify_checksum(f, "http://cs", "myasset.tar.gz", "gitleaks")
+            ok = await bm._verify_checksum(f, "https://cs", "myasset.tar.gz", "gitleaks")
         assert ok is True
 
 
@@ -392,7 +392,7 @@ class TestEnsureBinary:
         monkeypatch.setattr(bm, "is_installed", lambda name: False)
         monkeypatch.setattr(bm, "BIN_DIR", tmp_path / "bin")
         monkeypatch.setattr(bm, "_fetch_release_info", AsyncMock(return_value={"tag_name": "v8.0.0"}))
-        monkeypatch.setattr(bm, "_resolve_download_url", lambda *a: ("http://dl", None, "a.tar.gz"))
+        monkeypatch.setattr(bm, "_resolve_download_url", lambda *a: ("https://dl", None, "a.tar.gz"))
         monkeypatch.setattr(bm, "_download_to_temp", AsyncMock(return_value=None))
         out = await bm.ensure_binary("gitleaks")
         assert out is None
@@ -404,7 +404,7 @@ class TestEnsureBinary:
         monkeypatch.setattr(bm, "is_installed", lambda name: False)
         monkeypatch.setattr(bm, "BIN_DIR", tmp_path / "bin")
         monkeypatch.setattr(bm, "_fetch_release_info", AsyncMock(return_value={"tag_name": "v8.0.0"}))
-        monkeypatch.setattr(bm, "_resolve_download_url", lambda *a: ("http://dl", "http://cs", "a.tar.gz"))
+        monkeypatch.setattr(bm, "_resolve_download_url", lambda *a: ("https://dl", "https://cs", "a.tar.gz"))
         monkeypatch.setattr(bm, "_download_to_temp", AsyncMock(return_value=tmp_archive))
         monkeypatch.setattr(bm, "_verify_checksum", AsyncMock(return_value=False))
         out = await bm.ensure_binary("gitleaks")
@@ -419,7 +419,7 @@ class TestEnsureBinary:
         monkeypatch.setattr(bm, "BIN_DIR", tmp_path / "bin")
         monkeypatch.setattr(bm, "binary_path", lambda name: tmp_path / "bin" / "gitleaks")
         monkeypatch.setattr(bm, "_fetch_release_info", AsyncMock(return_value={"tag_name": "v8.0.0"}))
-        monkeypatch.setattr(bm, "_resolve_download_url", lambda *a: ("http://dl", None, "a.tar.gz"))
+        monkeypatch.setattr(bm, "_resolve_download_url", lambda *a: ("https://dl", None, "a.tar.gz"))
         monkeypatch.setattr(bm, "_download_to_temp", AsyncMock(return_value=tmp_archive))
         monkeypatch.setattr(bm, "_extract_binary", lambda *a: False)
         out = await bm.ensure_binary("gitleaks")
@@ -437,7 +437,7 @@ class TestEnsureBinary:
         monkeypatch.setattr(bm, "META_FILE", tmp_path / "meta.json")
         monkeypatch.setattr(bm, "binary_path", lambda name: dest)
         monkeypatch.setattr(bm, "_fetch_release_info", AsyncMock(return_value={"tag_name": "v8.0.0"}))
-        monkeypatch.setattr(bm, "_resolve_download_url", lambda *a: ("http://dl", None, "a.tar.gz"))
+        monkeypatch.setattr(bm, "_resolve_download_url", lambda *a: ("https://dl", None, "a.tar.gz"))
         monkeypatch.setattr(bm, "_download_to_temp", AsyncMock(return_value=tmp_archive))
 
         def _fake_extract(archive: Path, name: str, d: Path) -> bool:

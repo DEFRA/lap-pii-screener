@@ -701,7 +701,7 @@ class TestSetupSonarqube:
         from scanners import sonarqube_manager
         monkeypatch.setattr(sonarqube_manager, "persist_env_var", lambda n, v: True)
         results: list = []
-        cli._persist_sonar_token("http://h", "tok", results)
+        cli._persist_sonar_token("https://h", "tok", results)
         assert any("Admin token" in r[0] for r in results)
 
     def test_token_success(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -709,7 +709,7 @@ class TestSetupSonarqube:
         monkeypatch.setattr(sonarqube_manager, "ensure_admin_token", AsyncMock(return_value=("tok", "ok")))
         m = MagicMock()
         monkeypatch.setattr(cli, "_persist_sonar_token", m)
-        cli._setup_sonarqube_token("http://h", [])
+        cli._setup_sonarqube_token("https://h", [])
         m.assert_called_once()
 
     def test_token_failure(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -717,7 +717,7 @@ class TestSetupSonarqube:
         monkeypatch.setattr(sonarqube_manager, "ensure_admin_token", AsyncMock(return_value=(None, "no token")))
         monkeypatch.setattr(sonarqube_manager, "persist_env_var", lambda n, v: True)
         results: list = []
-        cli._setup_sonarqube_token("http://h", results)
+        cli._setup_sonarqube_token("https://h", results)
         assert any("Admin token" in r[0] for r in results)
 
     def test_token_exception(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -725,7 +725,7 @@ class TestSetupSonarqube:
         monkeypatch.setattr(sonarqube_manager, "ensure_admin_token", AsyncMock(side_effect=RuntimeError("boom")))
         monkeypatch.setattr(sonarqube_manager, "persist_env_var", lambda n, v: True)
         results: list = []
-        cli._setup_sonarqube_token("http://h", results)
+        cli._setup_sonarqube_token("https://h", results)
         assert any("boom" in str(r[2]) for r in results)
 
     def test_start_no_home(self, monkeypatch: pytest.MonkeyPatch) -> None:

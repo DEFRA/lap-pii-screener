@@ -443,7 +443,7 @@ class TestEnsureServerRunning:
     async def test_already_ready(self) -> None:
         sq = SonarQubeScanner()
         sq._is_ready = AsyncMock(return_value=True)
-        assert await sq._ensure_server_running("http://h") is True
+        assert await sq._ensure_server_running("https://h") is True
 
     @pytest.mark.asyncio
     async def test_native_start(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -452,7 +452,7 @@ class TestEnsureServerRunning:
         monkeypatch.setattr(ss, "_find_native_sonarqube", lambda: Path("/sq"))
         monkeypatch.setattr(ss.shutil, "which", lambda t: "/usr/bin/java")
         sq._start_native = AsyncMock(return_value=True)
-        assert await sq._ensure_server_running("http://h") is True
+        assert await sq._ensure_server_running("https://h") is True
 
     @pytest.mark.asyncio
     async def test_docker_start(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -462,7 +462,7 @@ class TestEnsureServerRunning:
         monkeypatch.setattr(ss.shutil, "which", lambda t: None)
         monkeypatch.setattr(ss, "detect_container_runtime", lambda: "docker")
         sq._start_docker = AsyncMock(return_value=True)
-        assert await sq._ensure_server_running("http://h") is True
+        assert await sq._ensure_server_running("https://h") is True
 
     @pytest.mark.asyncio
     async def test_nothing_available(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -471,7 +471,7 @@ class TestEnsureServerRunning:
         monkeypatch.setattr(ss, "_find_native_sonarqube", lambda: None)
         monkeypatch.setattr(ss.shutil, "which", lambda t: None)
         monkeypatch.setattr(ss, "detect_container_runtime", lambda: None)
-        assert await sq._ensure_server_running("http://h") is False
+        assert await sq._ensure_server_running("https://h") is False
 
 
 # --------------------------------------------------------------------------- #
@@ -484,14 +484,14 @@ class TestRun:
     async def test_no_token(self, monkeypatch: pytest.MonkeyPatch) -> None:
         sq = SonarQubeScanner()
         monkeypatch.delenv("SONAR_TOKEN", raising=False)
-        monkeypatch.setattr(ss, "_resolve_host_url", lambda: "http://h")
+        monkeypatch.setattr(ss, "_resolve_host_url", lambda: "https://h")
         assert await sq._run(ScanConfig(path="/p")) == []
 
     @pytest.mark.asyncio
     async def test_server_not_running(self, monkeypatch: pytest.MonkeyPatch) -> None:
         sq = SonarQubeScanner()
         sq._ensure_server_running = AsyncMock(return_value=False)
-        cfg = ScanConfig(path="/p", sonar_token="tok", sonar_host_url="http://h")
+        cfg = ScanConfig(path="/p", sonar_token="tok", sonar_host_url="https://h")
         assert await sq._run(cfg) == []
 
     @pytest.mark.asyncio
@@ -500,7 +500,7 @@ class TestRun:
         sq._ensure_server_running = AsyncMock(return_value=True)
         sq._ensure_project = AsyncMock()
         sq._run_scanner = AsyncMock(return_value=False)
-        cfg = ScanConfig(path="/p", sonar_token="tok", sonar_host_url="http://h")
+        cfg = ScanConfig(path="/p", sonar_token="tok", sonar_host_url="https://h")
         assert await sq._run(cfg) == []
 
     @pytest.mark.asyncio
@@ -514,7 +514,7 @@ class TestRun:
         drop = make_finding(file="excluded.py")
         sq._fetch_issues = AsyncMock(return_value=[keep])
         sq._fetch_hotspots = AsyncMock(return_value=[drop])
-        cfg = ScanConfig(path="/p", sonar_token="tok", sonar_host_url="http://h", exclude_files=["excluded.py"])
+        cfg = ScanConfig(path="/p", sonar_token="tok", sonar_host_url="https://h", exclude_files=["excluded.py"])
         out = await sq._run(cfg)
         assert out == [keep]
 
@@ -531,7 +531,7 @@ class TestRunScanner:
         monkeypatch.setattr(ss, "_find_sonar_scanner", lambda: "/sc/sonar-scanner")
         monkeypatch.setattr(ss.Path, "home", classmethod(lambda cls: tmp_path))
         monkeypatch.setattr(ss.asyncio, "create_subprocess_exec", AsyncMock(return_value=_proc(0)))
-        assert await sq._run_scanner("http://h", "tok", "key", "/src") is True
+        assert await sq._run_scanner("https://h", "tok", "key", "/src") is True
 
     @pytest.mark.asyncio
     async def test_native_failure(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -539,7 +539,7 @@ class TestRunScanner:
         monkeypatch.setattr(ss, "_find_sonar_scanner", lambda: "/sc/sonar-scanner")
         monkeypatch.setattr(ss.Path, "home", classmethod(lambda cls: tmp_path))
         monkeypatch.setattr(ss.asyncio, "create_subprocess_exec", AsyncMock(return_value=_proc(2, b"err")))
-        assert await sq._run_scanner("http://h", "tok", "key", "/src") is False
+        assert await sq._run_scanner("https://h", "tok", "key", "/src") is False
 
     @pytest.mark.asyncio
     async def test_docker_fallback(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -547,14 +547,14 @@ class TestRunScanner:
         monkeypatch.setattr(ss, "_find_sonar_scanner", lambda: None)
         monkeypatch.setattr(ss, "detect_container_runtime", lambda: "docker")
         monkeypatch.setattr(ss.asyncio, "create_subprocess_exec", AsyncMock(return_value=_proc(0)))
-        assert await sq._run_scanner("http://h", "tok", "key", "/src") is True
+        assert await sq._run_scanner("https://h", "tok", "key", "/src") is True
 
     @pytest.mark.asyncio
     async def test_no_scanner_no_runtime(self, monkeypatch: pytest.MonkeyPatch) -> None:
         sq = SonarQubeScanner()
         monkeypatch.setattr(ss, "_find_sonar_scanner", lambda: None)
         monkeypatch.setattr(ss, "detect_container_runtime", lambda: None)
-        assert await sq._run_scanner("http://h", "tok", "key", "/src") is False
+        assert await sq._run_scanner("https://h", "tok", "key", "/src") is False
 
 
 # --------------------------------------------------------------------------- #
@@ -569,19 +569,19 @@ class TestReadiness:
         resp = MagicMock()
         resp.json = MagicMock(return_value={"status": "UP"})
         with patch.object(ss.httpx, "AsyncClient", return_value=_client(get_resp=resp)):
-            assert await sq._is_ready("http://h") is True
+            assert await sq._is_ready("https://h") is True
 
     @pytest.mark.asyncio
     async def test_is_ready_error(self) -> None:
         sq = SonarQubeScanner()
         with patch.object(ss.httpx, "AsyncClient", side_effect=httpx.HTTPError("x")):
-            assert await sq._is_ready("http://h") is False
+            assert await sq._is_ready("https://h") is False
 
     @pytest.mark.asyncio
     async def test_wait_ready_success(self, monkeypatch: pytest.MonkeyPatch) -> None:
         sq = SonarQubeScanner()
         sq._is_ready = AsyncMock(return_value=True)
-        assert await sq._wait_ready("http://h") is True
+        assert await sq._wait_ready("https://h") is True
 
     @pytest.mark.asyncio
     async def test_wait_ready_timeout(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -595,7 +595,7 @@ class TestReadiness:
             return 9999.0 if calls["n"] > 2 else float(calls["n"] - 1)
 
         monkeypatch.setattr(ss.time, "monotonic", _mono)
-        assert await sq._wait_ready("http://h", max_wait=10) is False
+        assert await sq._wait_ready("https://h", max_wait=10) is False
 
 
 # --------------------------------------------------------------------------- #
@@ -608,14 +608,14 @@ class TestEnsureProjectPollTask:
     async def test_ensure_project_swallows_error(self) -> None:
         sq = SonarQubeScanner()
         with patch.object(ss.httpx, "AsyncClient", side_effect=httpx.HTTPError("x")):
-            await sq._ensure_project("http://h", "tok", "key", "name")  # no raise
+            await sq._ensure_project("https://h", "tok", "key", "name")  # no raise
 
     @pytest.mark.asyncio
     async def test_ensure_project_success(self) -> None:
         sq = SonarQubeScanner()
         client = _client(post_resp=MagicMock())
         with patch.object(ss.httpx, "AsyncClient", return_value=client):
-            await sq._ensure_project("http://h", "tok", "key", "name")
+            await sq._ensure_project("https://h", "tok", "key", "name")
         client.post.assert_awaited_once()
 
     @pytest.mark.asyncio
@@ -624,7 +624,7 @@ class TestEnsureProjectPollTask:
         resp = MagicMock()
         resp.json = MagicMock(return_value={"tasks": []})
         with patch.object(ss.httpx, "AsyncClient", return_value=_client(get_resp=resp)):
-            await sq._poll_task("http://h", "tok", "key")  # returns immediately
+            await sq._poll_task("https://h", "tok", "key")  # returns immediately
 
     @pytest.mark.asyncio
     async def test_poll_task_timeout(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -640,7 +640,7 @@ class TestEnsureProjectPollTask:
 
         monkeypatch.setattr(ss.time, "monotonic", _mono)
         with patch.object(ss.httpx, "AsyncClient", return_value=_client(get_resp=resp)):
-            await sq._poll_task("http://h", "tok", "key", max_wait=10)
+            await sq._poll_task("https://h", "tok", "key", max_wait=10)
 
     @pytest.mark.asyncio
     async def test_poll_task_error_swallowed(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -655,7 +655,7 @@ class TestEnsureProjectPollTask:
         monkeypatch.setattr(ss.time, "monotonic", _mono)
         client = _client(get_side=[ValueError("bad json")])
         with patch.object(ss.httpx, "AsyncClient", return_value=client):
-            await sq._poll_task("http://h", "tok", "key", max_wait=10)
+            await sq._poll_task("https://h", "tok", "key", max_wait=10)
 
 
 # --------------------------------------------------------------------------- #
@@ -694,7 +694,7 @@ class TestFetchIssues:
         )
         monkeypatch.setattr(sq, "_normalise_issue", lambda *a, **k: "F")
         with patch.object(ss.httpx, "AsyncClient", return_value=_client(get_resp=resp)):
-            out = await sq._fetch_issues("http://h", "tok", "key", "/src")
+            out = await sq._fetch_issues("https://h", "tok", "key", "/src")
         assert out == ["F"]
 
     @pytest.mark.asyncio
@@ -702,7 +702,7 @@ class TestFetchIssues:
         sq = SonarQubeScanner()
         client = _client(get_side=[httpx.HTTPError("x")])
         with patch.object(ss.httpx, "AsyncClient", return_value=client):
-            assert await sq._fetch_issues("http://h", "tok", "key", "/src") == []
+            assert await sq._fetch_issues("https://h", "tok", "key", "/src") == []
 
     @pytest.mark.asyncio
     async def test_multi_page(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -715,7 +715,7 @@ class TestFetchIssues:
         page2.json = MagicMock(return_value={"issues": [{"rule": "b"}], "paging": {"total": 600}})
         monkeypatch.setattr(sq, "_normalise_issue", lambda *a, **k: "F")
         with patch.object(ss.httpx, "AsyncClient", return_value=_client(get_side=[page1, page2])):
-            out = await sq._fetch_issues("http://h", "tok", "key", "/src")
+            out = await sq._fetch_issues("https://h", "tok", "key", "/src")
         assert out == ["F", "F"]
 
 
@@ -733,7 +733,7 @@ class TestFetchHotspots:
         resp.json = MagicMock(return_value={"hotspots": [{"ruleKey": "r"}], "paging": {"total": 1}})
         monkeypatch.setattr(sq, "_normalise_hotspot", lambda *a, **k: "H")
         with patch.object(ss.httpx, "AsyncClient", return_value=_client(get_resp=resp)):
-            out = await sq._fetch_hotspots("http://h", "tok", "key", "/src")
+            out = await sq._fetch_hotspots("https://h", "tok", "key", "/src")
         assert out == ["H"]
 
     @pytest.mark.asyncio
@@ -741,7 +741,7 @@ class TestFetchHotspots:
         sq = SonarQubeScanner()
         client = _client(get_side=[httpx.HTTPError("x")])
         with patch.object(ss.httpx, "AsyncClient", return_value=client):
-            assert await sq._fetch_hotspots("http://h", "tok", "key", "/src") == []
+            assert await sq._fetch_hotspots("https://h", "tok", "key", "/src") == []
 
     @pytest.mark.asyncio
     async def test_multi_page(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -754,7 +754,7 @@ class TestFetchHotspots:
         page2.json = MagicMock(return_value={"hotspots": [{"ruleKey": "r"}], "paging": {"total": 600}})
         monkeypatch.setattr(sq, "_normalise_hotspot", lambda *a, **k: "H")
         with patch.object(ss.httpx, "AsyncClient", return_value=_client(get_side=[page1, page2])):
-            out = await sq._fetch_hotspots("http://h", "tok", "key", "/src")
+            out = await sq._fetch_hotspots("https://h", "tok", "key", "/src")
         assert out == ["H", "H"]
 
 

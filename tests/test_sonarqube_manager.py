@@ -276,7 +276,7 @@ class TestDownloadExtract:
 
         client = _stream_client(payload, headers={"content-length": str(len(payload))})
         with patch.object(sm.httpx, "AsyncClient", return_value=client):
-            out = await sm._download_and_extract_zip("http://dl", dest, "pkg", progress_callback=_cb)
+            out = await sm._download_and_extract_zip("https://dl", dest, "pkg", progress_callback=_cb)
         assert out == dest
         assert (dest / "bin" / "run").read_bytes() == b"x"
         assert called["done"] == len(payload)
@@ -289,7 +289,7 @@ class TestDownloadExtract:
         payload = _zip_bytes("pkg-2.0", {"new.txt": b"new"})
         client = _stream_client(payload)
         with patch.object(sm.httpx, "AsyncClient", return_value=client):
-            out = await sm._download_and_extract_zip("http://dl", dest, "pkg")
+            out = await sm._download_and_extract_zip("https://dl", dest, "pkg")
         assert out == dest
         assert (dest / "new.txt").exists()
         assert not (dest / "stale.txt").exists()
@@ -297,7 +297,7 @@ class TestDownloadExtract:
     @pytest.mark.asyncio
     async def test_download_failure_returns_none(self, tmp_path: Path) -> None:
         with patch.object(sm.httpx, "AsyncClient", side_effect=httpx.HTTPError("net")):
-            out = await sm._download_and_extract_zip("http://dl", tmp_path / "x", "pkg")
+            out = await sm._download_and_extract_zip("https://dl", tmp_path / "x", "pkg")
         assert out is None
 
     @pytest.mark.asyncio
@@ -306,7 +306,7 @@ class TestDownloadExtract:
         dest = tmp_path / "installed"
         client = _stream_client(payload)
         with patch.object(sm.httpx, "AsyncClient", return_value=client):
-            out = await sm._download_and_extract_zip("http://dl", dest, "pkg")
+            out = await sm._download_and_extract_zip("https://dl", dest, "pkg")
         assert out == dest
         assert (dest / "a" / "f1").exists()
         assert (dest / "b" / "f2").exists()
@@ -402,7 +402,7 @@ class TestScannerInstall:
         monkeypatch.setattr(sm, "_machine", lambda: "x64")
         release = {
             "tag_name": "5.0",
-            "assets": [{"name": "sonar-scanner-cli-5.0-windows-x64.zip", "browser_download_url": "http://asset"}],
+            "assets": [{"name": "sonar-scanner-cli-5.0-windows-x64.zip", "browser_download_url": "https://asset"}],
         }
         monkeypatch.setattr(sm, "_fetch_latest_release", AsyncMock(return_value=release))
         captured = {}
@@ -414,7 +414,7 @@ class TestScannerInstall:
         monkeypatch.setattr(sm, "_download_and_extract_zip", _dl)
         out = await sm.ensure_sonar_scanner()
         assert out == tmp_path
-        assert captured["url"] == "http://asset"
+        assert captured["url"] == "https://asset"
         assert sm._load_meta()["sonar-scanner-cli"] == {"version": "5.0"}
 
     @pytest.mark.asyncio
@@ -641,7 +641,7 @@ class TestEnsureAdminToken:
         client.__aenter__ = AsyncMock(return_value=client)
         client.__aexit__ = AsyncMock(return_value=False)
         with patch.object(sm.httpx, "AsyncClient", return_value=client):
-            token, reason = await sm.ensure_admin_token("http://h")
+            token, reason = await sm.ensure_admin_token("https://h")
         assert token is None
         assert "Could not reach" in reason
 
@@ -652,7 +652,7 @@ class TestEnsureAdminToken:
         get.json = MagicMock(return_value={})
         client = self._client_with(get, [])
         with patch.object(sm.httpx, "AsyncClient", return_value=client):
-            token, reason = await sm.ensure_admin_token("http://h")
+            token, reason = await sm.ensure_admin_token("https://h")
         assert token is None
         assert "rejected" in reason
 
@@ -663,7 +663,7 @@ class TestEnsureAdminToken:
         get.json = MagicMock(return_value={"valid": False})
         client = self._client_with(get, [])
         with patch.object(sm.httpx, "AsyncClient", return_value=client):
-            token, reason = await sm.ensure_admin_token("http://h")
+            token, reason = await sm.ensure_admin_token("https://h")
         assert token is None
         assert "unexpected response" in reason
 
@@ -678,7 +678,7 @@ class TestEnsureAdminToken:
         gen.json = MagicMock(return_value={"token": "squ_abc"})
         client = self._client_with(get, [revoke, gen])
         with patch.object(sm.httpx, "AsyncClient", return_value=client):
-            token, reason = await sm.ensure_admin_token("http://h")
+            token, reason = await sm.ensure_admin_token("https://h")
         assert token == "squ_abc"
         assert reason == "ok"
 
@@ -694,7 +694,7 @@ class TestEnsureAdminToken:
         gen.text = "no token here"
         client = self._client_with(get, [revoke, gen])
         with patch.object(sm.httpx, "AsyncClient", return_value=client):
-            token, reason = await sm.ensure_admin_token("http://h")
+            token, reason = await sm.ensure_admin_token("https://h")
         assert token is None
         assert "Token field missing" in reason
 
@@ -709,7 +709,7 @@ class TestEnsureAdminToken:
         gen.text = "You must change your password"
         client = self._client_with(get, [revoke, gen])
         with patch.object(sm.httpx, "AsyncClient", return_value=client):
-            token, reason = await sm.ensure_admin_token("http://h")
+            token, reason = await sm.ensure_admin_token("https://h")
         assert token is None
         assert "change the admin password" in reason
 
@@ -724,7 +724,7 @@ class TestEnsureAdminToken:
         gen.text = "forbidden"
         client = self._client_with(get, [revoke, gen])
         with patch.object(sm.httpx, "AsyncClient", return_value=client):
-            token, reason = await sm.ensure_admin_token("http://h")
+            token, reason = await sm.ensure_admin_token("https://h")
         assert token is None
         assert "HTTP 403" in reason
 
@@ -740,7 +740,7 @@ class TestEnsureAdminToken:
         client.__aenter__ = AsyncMock(return_value=client)
         client.__aexit__ = AsyncMock(return_value=False)
         with patch.object(sm.httpx, "AsyncClient", return_value=client):
-            token, reason = await sm.ensure_admin_token("http://h")
+            token, reason = await sm.ensure_admin_token("https://h")
         assert token is None
         assert "exception" in reason
 
@@ -759,6 +759,6 @@ class TestEnsureAdminToken:
         client.__aenter__ = AsyncMock(return_value=client)
         client.__aexit__ = AsyncMock(return_value=False)
         with patch.object(sm.httpx, "AsyncClient", return_value=client):
-            token, reason = await sm.ensure_admin_token("http://h")
+            token, reason = await sm.ensure_admin_token("https://h")
         assert token == "squ_xyz"
         assert reason == "ok"
