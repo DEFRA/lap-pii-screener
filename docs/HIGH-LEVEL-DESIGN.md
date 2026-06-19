@@ -32,7 +32,67 @@ Both entry points create a `ScanConfig`, call `orchestrator.run_scan()`, and rec
 
 ## 3. High-Level Architecture
 
-![Component Architecture](images/arch-diagram.svg)
+```mermaid
+flowchart TD
+    subgraph EP["ENTRY POINTS"]
+        direction LR
+        CLI["<b>CLI</b> · cli.py<br/>scan · status · setup · report<br/>obfuscate · rollback · edit"]
+        MCP["<b>MCP Server</b> · server.py<br/>scan_codebase · get_report · list_findings<br/>get_remediation · check_scanner_status"]
+    end
+
+    ORCH["<b>SCAN ORCHESTRATOR</b> · scanners/orchestrator.py<br/>Detect backends (Tier 1/2/3) · run concurrently via asyncio<br/>merge &amp; deduplicate · apply suppressions · cache Report"]
+
+    EP --> ORCH
+
+    GL["<b>Gitleaks</b><br/>gitleaks_scanner.py<br/>150+ secret patterns<br/><i>Tier 1 · subprocess</i>"]
+    SG["<b>Semgrep</b><br/>semgrep_scanner.py<br/>Code-structure / OWASP rules<br/><i>Tier 1 · subprocess</i>"]
+    PII["<b>PII Scanner</b><br/>pii_scanner.py<br/>Regex + NER + binary docs<br/><i>Tier 1 · in-process</i>"]
+    SQ["<b>SonarQube</b><br/>sonarqube_scanner.py<br/>Taint + data-flow analysis<br/><i>Tier 2/3 · optional</i>"]
+
+    ORCH --> GL
+    ORCH --> SG
+    ORCH --> PII
+    ORCH -. optional .-> SQ
+
+    REM["<b>REMEDIATION + REGULATION ENGINES</b><br/>remediation/engine.py · remediation/regulation_engine.py<br/>rule_id → category · severity · fix_steps · CWE/OWASP · UK GDPR / PCI DSS / PSR 2017"]
+
+    GL --> REM
+    SG --> REM
+    PII --> REM
+    SQ -.-> REM
+
+    MODELS["<b>REPORT / FINDING MODELS</b><br/>models/finding.py · models/report.py<br/>ScanConfig · Finding · Report · ScanSummary"]
+
+    REM --> MODELS
+
+    CON["<b>Console Reporter</b><br/>reporting/console.py<br/>Rich terminal output"]
+    MD["<b>Markdown Reporter</b><br/>reporting/markdown_reporter.py<br/>Jinja2 → .md file"]
+    HJ["<b>HTML / JSON Reporters</b><br/>html_reporter.py · json_reporter.py<br/>Jinja2 · machine-readable"]
+
+    MODELS --> CON
+    MODELS --> MD
+    MODELS --> HJ
+
+    classDef entry fill:#DBEAFE,stroke:#2563EB,color:#1E3A8A
+    classDef orch fill:#DCFCE7,stroke:#16A34A,color:#14532D
+    classDef tool fill:#FEF3C7,stroke:#D97706,color:#92400E
+    classDef pii fill:#FCE7F3,stroke:#DB2777,color:#9D174D
+    classDef opt fill:#F1F5F9,stroke:#94A3B8,color:#475569,stroke-dasharray:5 3
+    classDef rem fill:#F3E8FF,stroke:#7C3AED,color:#4C1D95
+    classDef model fill:#EFF6FF,stroke:#3B82F6,color:#1E3A8A
+    classDef rep fill:#F0FDF4,stroke:#16A34A,color:#14532D
+
+    class CLI,MCP entry
+    class ORCH orch
+    class GL,SG tool
+    class PII pii
+    class SQ opt
+    class REM rem
+    class MODELS model
+    class CON,MD,HJ rep
+```
+
+> Solid arrows show the primary data flow. The dashed path to **SonarQube** marks an optional Tier 2/3 backend.
 
 ---
 
@@ -127,7 +187,7 @@ An optional post-scan remediation workflow:
 
 ```
 path                 : str               — target directory
-scanners             : list[str]         — ["gitleaks", "semgrep", "pii"]
+scanners             : list[str]         — ["gitleaks", "semgrep", "presidio"]
 project_name         : str
 include_git_history  : bool
 exclude_paths        : list[str]
@@ -175,7 +235,66 @@ summary          : ScanSummary
 
 ## 6. Data Flow: Scan to Report
 
-![Scan Data Flow](images/dataflow-diagram.svg)
+```mermaid
+flowchart TD
+    CLI["<b>CLI</b> · cli.py<br/>sensitive-scanner scan"]
+    MCP["<b>MCP Server</b> · server.py<br/>scan_codebase tool"]
+
+    CFG(["ScanConfig"])
+    CLI --> CFG
+    MCP --> CFG
+
+    CFG --> RUN["<b>orchestrator.run_scan(config)</b><br/>scanners/orchestrator.py"]
+
+    RUN --> GL["Gitleaks<br/><i>Tier 1 · binary</i>"]
+    RUN --> SG["Semgrep<br/><i>Tier 1 · pip/binary</i>"]
+    RUN --> PII["PII Scanner<br/><i>Tier 1 · in-process</i>"]
+    RUN -. optional .-> SQ["SonarQube<br/><i>Tier 2/3</i>"]
+
+    FIND(["list[Finding] × 4"])
+    GL --> FIND
+    SG --> FIND
+    PII --> FIND
+    SQ -.-> FIND
+
+    FIND --> SUP["<b>_apply_suppression()</b><br/>Filter findings per suppress_by_scanner rules"]
+    SUP --> DED["<b>_deduplicate()</b><br/>Merge same file:line:rule_id across scanners"]
+    DED --> INL["<b>_filter_inline_suppressions()</b><br/>Remove findings with # noscan in source line"]
+    INL --> ENR["<b>RemediationEngine.enrich() + RegulationEngine.enrich()</b><br/>Adds category · severity · fix_steps · CWE/OWASP · regulations"]
+    ENR --> REP["<b>Report</b> (cached in memory)<br/>report.build_summary() · _cache_report()"]
+
+    REP --> RC["<b>render_console(report)</b><br/>Rich terminal tables"]
+    REP --> RF["<b>render_markdown / html / json</b><br/>Jinja2 templates + structured output"]
+
+    RC --> OUT1["stdout (Rich display)<br/>terminal / CI/CD console"]
+    RF --> OUT2["File output (--output flag)<br/>.md / .html / .json report file"]
+
+    classDef entry fill:#DBEAFE,stroke:#2563EB,color:#1E3A8A
+    classDef orch fill:#DCFCE7,stroke:#16A34A,color:#14532D
+    classDef tool fill:#FEF3C7,stroke:#D97706,color:#92400E
+    classDef pii fill:#FCE7F3,stroke:#DB2777,color:#9D174D
+    classDef opt fill:#F1F5F9,stroke:#94A3B8,color:#475569,stroke-dasharray:5 3
+    classDef pipe fill:#F0F9FF,stroke:#0EA5E9,color:#0C4A6E
+    classDef rem fill:#F3E8FF,stroke:#7C3AED,color:#4C1D95
+    classDef model fill:#EFF6FF,stroke:#3B82F6,color:#1E3A8A
+    classDef rep fill:#F0FDF4,stroke:#16A34A,color:#14532D
+    classDef cfg fill:#F8FAFC,stroke:#475569,color:#334155
+    classDef out fill:#F1F5F9,stroke:#64748B,color:#334155
+
+    class CLI,MCP entry
+    class CFG,FIND cfg
+    class RUN orch
+    class GL,SG tool
+    class PII pii
+    class SQ opt
+    class SUP,DED,INL pipe
+    class ENR rem
+    class REP model
+    class RC,RF rep
+    class OUT1,OUT2 out
+```
+
+> Solid arrows show the primary data flow; the dashed path marks the optional SonarQube backend. Blue pipeline steps run sequentially after all scanners complete.
 
 ---
 
@@ -286,7 +405,7 @@ server.py                   — MCP server entry point (FastMCP)
 config_loader.py            — suppress.txt parser
 
 models/
-  finding.py                — ScanConfig, Finding, RemediationRule
+  finding.py                — ScanConfig, Finding
   report.py                 — Report, ScanSummary
 
 scanners/
