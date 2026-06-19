@@ -82,6 +82,10 @@ asyncio_default_fixture_loop_scope = "function"
 [tool.coverage.run]
 source = ["src"]
 omit = []
+# Write paths relative to the project root so SonarCloud can map coverage
+# entries onto the indexed `sonar.sources=src` files (see SonarQube Cloud
+# Python test coverage docs).
+relative_files = true
 [tool.coverage.report]
 fail_under = 90
 show_missing = true
