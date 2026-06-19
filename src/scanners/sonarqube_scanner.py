@@ -23,9 +23,12 @@ _ENGINE = RemediationEngine()
 _DOCKER_COMPOSE_FILE = Path(__file__).parent.parent / "docker" / "docker-compose.yml"
 _SONAR_SCANNER_IMAGE = "sonarsource/sonar-scanner-cli:latest"
 
+# Per-user application data directory name (under the user's home directory).
+_APP_DIR_NAME = ".sensitive-scanner"
+
 # Default paths for native (non-Docker) installs
-_NATIVE_SQ_DEFAULT = Path.home() / ".sensitive-scanner" / "sonarqube"
-_NATIVE_SCANNER_DEFAULT = Path.home() / ".sensitive-scanner" / "sonar-scanner"
+_NATIVE_SQ_DEFAULT = Path.home() / _APP_DIR_NAME / "sonarqube"
+_NATIVE_SCANNER_DEFAULT = Path.home() / _APP_DIR_NAME / "sonar-scanner"
 
 
 def _find_native_sonarqube() -> Optional[Path]:
@@ -408,7 +411,7 @@ class SonarQubeScanner(AbstractScanner):
             # the public temp space — that would be vulnerable to symlink/TOCTOU
             # attacks. Kept reasonably short to limit Windows MAX_PATH issues with
             # the AnalysisTempFolder bean in the scanner engine.
-            work_dir = str(Path.home() / ".sensitive-scanner" / "sonar-work")
+            work_dir = str(Path.home() / _APP_DIR_NAME / "sonar-work")
             Path(work_dir).mkdir(parents=True, exist_ok=True)
             cmd = [
                 native_scanner,

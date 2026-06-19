@@ -1201,7 +1201,6 @@ def obfuscate(
     from models.finding import Finding as _Finding, ScanConfig, _DEFAULT_EXCLUDE
     from scanners.orchestrator import run_scan
     from obfuscation.session import ReviewSession
-    from obfuscation.engine import apply_session as _apply_session
     from obfuscation.reviewer import run_review
 
     target = _validate_path(path)
@@ -1286,13 +1285,30 @@ def obfuscate(
         console=_console,
     )
 
+    _obf_apply_and_finalize(
+        session, _report, target, _backup_dir, dry_run, report_path, show_secrets,
+    )
+
+
+def _obf_apply_and_finalize(
+    session: "object",
+    report: "Report | None",
+    target: Path,
+    backup_dir: Path,
+    dry_run: bool,
+    report_path: Optional[Path],
+    show_secrets: bool,
+) -> None:
+    """Apply approved replacements and optionally write the HTML report."""
+    from obfuscation.engine import apply_session as _apply_session
+
     approved_count = len(session.approved())
     if approved_count == 0:
         _console.print(
             "\n[dim]No findings approved for obfuscation — no files modified.[/dim]"
         )
         if report_path:
-            _write_obfuscation_report(_report, session, report_path, dry_run=dry_run, show_secrets=show_secrets)
+            _write_obfuscation_report(report, session, report_path, dry_run=dry_run, show_secrets=show_secrets)
         return
 
     # ── Apply replacements ────────────────────────────────────────────────────
@@ -1300,7 +1316,7 @@ def obfuscate(
         f"\n[bold]Applying[/bold] {approved_count} replacement(s)…"
         + ("  [dim](dry-run — no files written)[/dim]" if dry_run else "")
     )
-    apply_result = _apply_session(session, target, _backup_dir, dry_run=dry_run, console=_console)
+    apply_result = _apply_session(session, target, backup_dir, dry_run=dry_run, console=_console)
 
     _console.print(
         f"\n[bold green]Done.[/bold green]  "
@@ -1310,14 +1326,14 @@ def obfuscate(
 
     if not dry_run and apply_result.applied_count:
         _console.print(
-            f"[dim]Backups in: {_backup_dir}[/dim]\n"
+            f"[dim]Backups in: {backup_dir}[/dim]\n"
             f"[dim]To undo:   sensitive-scanner rollback {target} "
-            f"--backup-dir {_backup_dir}[/dim]"
+            f"--backup-dir {backup_dir}[/dim]"
         )
 
     # ── HTML report ───────────────────────────────────────────────────────────
     if report_path:
-        _write_obfuscation_report(_report, session, report_path, dry_run=dry_run, show_secrets=show_secrets)
+        _write_obfuscation_report(report, session, report_path, dry_run=dry_run, show_secrets=show_secrets)
 
 
 def _write_obfuscation_report(
