@@ -65,6 +65,23 @@ def _build_skip_results(
     ]
 
 
+def _print_applied(
+    console: Optional["Console"],
+    rel_path: str,
+    item: "ReviewItem",
+    dry_run: bool,
+) -> None:
+    """Print the success line for a single applied replacement."""
+    if not console:
+        return
+    prefix = "[dry-run] " if dry_run else ""
+    style = "dim" if dry_run else "green"
+    console.print(
+        f"  [{style}]{prefix}{rel_path}:{item.line} "
+        f"→ {item.replacement}[/{style}]"
+    )
+
+
 def _apply_single_item(
     item: "ReviewItem",
     lines: list[str],
@@ -89,13 +106,7 @@ def _apply_single_item(
         if not dry_run:
             lines[idx] = lines[idx].replace(item.raw_match, item.replacement, 1)
             file_changed = True
-        if console:
-            prefix = "[dry-run] " if dry_run else ""
-            style = "dim" if dry_run else "green"
-            console.print(
-                f"  [{style}]{prefix}{rel_path}:{item.line} "
-                f"→ {item.replacement}[/{style}]"
-            )
+        _print_applied(console, rel_path, item, dry_run)
         return ItemResult(
             finding_id=item.finding_id,
             file=rel_path,
