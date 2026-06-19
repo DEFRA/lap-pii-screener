@@ -17,7 +17,7 @@ from pathlib import Path
 
 # Ensure the project root is on sys.path when run directly
 _ROOT = Path(__file__).parent.resolve()
-if str(_ROOT) not in sys.path:
+if str(_ROOT) not in sys.path:  # pragma: no cover - import-time path bootstrap
     sys.path.insert(0, str(_ROOT))
 
 from mcp.server.fastmcp import FastMCP
@@ -380,5 +380,5 @@ def main() -> None:
     mcp.run(transport="stdio")
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     main()

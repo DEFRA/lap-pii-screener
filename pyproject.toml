@@ -81,19 +81,11 @@ asyncio_default_fixture_loop_scope = "function"
 
 [tool.coverage.run]
 source = ["src"]
-omit = [
-    "src/cli.py",
-    "src/server.py",
-    "src/obfuscation/reviewer.py",
-    "src/scanners/binary_manager.py",
-    "src/scanners/sonarqube_manager.py",
-    "src/scanners/sonarqube_scanner.py",
-    "src/scanners/gitleaks_scanner.py",
-    "src/scanners/semgrep_scanner.py",
-    "src/scanners/pii_scanner.py",
-    "src/scanners/orchestrator.py",
-]
-
+omit = []
+# Write paths relative to the project root so SonarCloud can map coverage
+# entries onto the indexed `sonar.sources=src` files (see SonarQube Cloud
+# Python test coverage docs).
+relative_files = true
 [tool.coverage.report]
 fail_under = 90
 show_missing = true

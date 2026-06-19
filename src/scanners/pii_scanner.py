@@ -39,56 +39,56 @@ _AVRO_AVAILABLE = False
 
 try:
     import docx as _docx_module  # python-docx
-    _DOCX_AVAILABLE = True
+    _DOCX_AVAILABLE = True  # pragma: no cover
 except ImportError:
     pass
 
 try:
     import openpyxl as _openpyxl  # openpyxl
-    _XLSX_AVAILABLE = True
+    _XLSX_AVAILABLE = True  # pragma: no cover
 except ImportError:
     pass
 
 try:
     import xlrd as _xlrd  # xlrd (legacy .xls)
-    _XLS_AVAILABLE = True
+    _XLS_AVAILABLE = True  # pragma: no cover
 except ImportError:
     pass
 
 try:
     from striprtf.striprtf import rtf_to_text as _rtf_to_text  # striprtf
-    _RTF_AVAILABLE = True
+    _RTF_AVAILABLE = True  # pragma: no cover
 except ImportError:
     pass
 
 try:
     import olefile as _olefile  # olefile (legacy .doc)
-    _DOC_AVAILABLE = True
+    _DOC_AVAILABLE = True  # pragma: no cover
 except ImportError:
     pass
 
 try:
     from pdfminer.high_level import extract_text as _pdfminer_extract  # pdfminer.six
-    _PDF_AVAILABLE = True
+    _PDF_AVAILABLE = True  # pragma: no cover
 except ImportError:
     pass
 
 try:
     import extract_msg as _extract_msg_lib  # extract-msg (Outlook .msg)
-    _MSG_AVAILABLE = True
+    _MSG_AVAILABLE = True  # pragma: no cover
 except ImportError:
     pass
 
 try:
     import pyarrow.parquet as _pq  # pyarrow (.parquet)
     import pyarrow.orc as _pa_orc  # pyarrow (.orc)
-    _PYARROW_AVAILABLE = True
+    _PYARROW_AVAILABLE = True  # pragma: no cover
 except ImportError:
     pass
 
 try:
     import fastavro as _fastavro  # fastavro (.avro)
-    _AVRO_AVAILABLE = True
+    _AVRO_AVAILABLE = True  # pragma: no cover
 except ImportError:
     pass
 
@@ -100,6 +100,10 @@ _BINARY_DOC_EXTENSIONS: set[str] = {
 
 # Archive file extensions handled by the traversal engine
 _ARCHIVE_EXTENSIONS: set[str] = {".zip", ".gz", ".bz2", ".tar", ".tgz"}
+
+# Compound tar extensions (matched against full file names, not Path.suffix)
+_TAR_GZ = ".tar.gz"
+_TAR_BZ2 = ".tar.bz2"
 
 # Maximum nested archive depth (FR-ING-004 default: 10)
 _MAX_ARCHIVE_DEPTH: int = 10
@@ -360,7 +364,7 @@ _SPACY_AVAILABLE = False
 _SPACY_INIT_ATTEMPTED = False
 
 
-def _ensure_spacy() -> None:
+def _ensure_spacy() -> None:  # pragma: no cover - requires optional spaCy install
     """Lazy-load the spaCy model on first use — avoids ~30s import cost at startup."""
     global _NLP, _SPACY_AVAILABLE, _SPACY_INIT_ATTEMPTED
     if _SPACY_INIT_ATTEMPTED:
@@ -385,7 +389,7 @@ _PRESIDIO_AVAILABLE = False
 _PRESIDIO_INIT_ATTEMPTED = False
 
 
-def _ensure_presidio() -> None:
+def _ensure_presidio() -> None:  # pragma: no cover - requires optional Presidio install
     """Lazy-load Presidio on first use — avoids ~40s import cost at startup."""
     global _PRESIDIO_ANALYZER, _PRESIDIO_AVAILABLE, _PRESIDIO_INIT_ATTEMPTED
     if _PRESIDIO_INIT_ATTEMPTED:
@@ -445,7 +449,7 @@ _SKIP_NAME_COL_RE = re.compile(
 )
 
 
-def _ner_confirm_person(text: str, threshold: float = 0.65) -> bool:
+def _ner_confirm_person(text: str, threshold: float = 0.65) -> bool:  # pragma: no cover - requires optional NER backend
     """Return True if NER identifies *text* as a person name.
 
     Tries Presidio first (score-based), falls back to spaCy when Presidio is
@@ -504,7 +508,7 @@ def _text_chunks_from_line(line: str, skip_comments: bool = False) -> list[str]:
     return chunks
 
 
-def _build_presidio_finding(
+def _build_presidio_finding(  # pragma: no cover - requires optional Presidio install
     file_rel: str, lineno: int, name: str, score: float, show_secrets: bool
 ) -> Finding:
     """Construct a Presidio PERSON Finding."""
@@ -529,7 +533,7 @@ def _build_presidio_finding(
     )
 
 
-def _presidio_person_findings(
+def _presidio_person_findings(  # pragma: no cover - requires optional Presidio install
     file_rel: str, lineno: int, chunk: str, threshold: float, show_secrets: bool
 ) -> list[Finding]:
     """Return Presidio PERSON findings for a single text chunk."""
@@ -549,7 +553,7 @@ def _presidio_person_findings(
     return out
 
 
-def _build_spacy_finding(
+def _build_spacy_finding(  # pragma: no cover - requires optional spaCy install
     file_rel: str, lineno: int, text: str, show_secrets: bool
 ) -> Finding:
     """Construct a spaCy PERSON Finding."""
@@ -574,7 +578,7 @@ def _build_spacy_finding(
     )
 
 
-def _spacy_person_findings(
+def _spacy_person_findings(  # pragma: no cover - requires optional spaCy install
     file_rel: str, lineno: int, chunk: str, show_secrets: bool
 ) -> list[Finding]:
     """Return spaCy PERSON findings for a single text chunk."""
@@ -589,7 +593,7 @@ def _spacy_person_findings(
     return out
 
 
-def _extract_ner_findings(file_rel: str, content: str, show_secrets: bool = False, skip_comments: bool = False) -> list[Finding]:
+def _extract_ner_findings(file_rel: str, content: str, show_secrets: bool = False, skip_comments: bool = False) -> list[Finding]:  # pragma: no cover - requires optional NER backend
     """Run NER on string literal / comment text; flag plausible PERSON entities.
 
     Uses Presidio when available (score-based), falls back to spaCy (low
@@ -745,7 +749,7 @@ def _strict_column_findings(
     return out
 
 
-def _broad_column_findings(
+def _broad_column_findings(  # pragma: no cover - requires optional NER backend
     file_rel: str, headers: list[str], row: list[str], row_idx: int,
     broad_col_indices: list[int], show_secrets: bool,
 ) -> list[Finding]:
@@ -856,7 +860,7 @@ def _scan_csv_columns(file_rel: str, content: str, show_secrets: bool) -> list[F
 
 # ─── Binary document text extractors ─────────────────────────────────────────
 
-def _extract_docx_text(data: bytes) -> Optional[str]:
+def _extract_docx_text(data: bytes) -> Optional[str]:  # pragma: no cover - requires optional python-docx
     """Extract plain text from a .docx file (requires python-docx)."""
     if not _DOCX_AVAILABLE:
         return None
@@ -877,7 +881,7 @@ def _extract_docx_text(data: bytes) -> Optional[str]:
         return None
 
 
-def _extract_xlsx_text(data: bytes) -> Optional[str]:
+def _extract_xlsx_text(data: bytes) -> Optional[str]:  # pragma: no cover - requires optional openpyxl
     """Extract cell values from all sheets of an .xlsx file (requires openpyxl)."""
     if not _XLSX_AVAILABLE:
         return None
@@ -895,7 +899,7 @@ def _extract_xlsx_text(data: bytes) -> Optional[str]:
         return None
 
 
-def _extract_rtf_text(data: bytes) -> Optional[str]:
+def _extract_rtf_text(data: bytes) -> Optional[str]:  # pragma: no cover - requires optional striprtf
     """Extract plain text from an .rtf file (requires striprtf)."""
     if not _RTF_AVAILABLE:
         return None
@@ -932,7 +936,7 @@ def _extract_eml_text(data: bytes) -> Optional[str]:
         return None
 
 
-def _extract_xls_text(data: bytes) -> Optional[str]:
+def _extract_xls_text(data: bytes) -> Optional[str]:  # pragma: no cover - requires optional xlrd
     """Extract cell values from all sheets of a legacy .xls file (requires xlrd)."""
     if not _XLS_AVAILABLE:
         return None
@@ -954,7 +958,7 @@ def _extract_xls_text(data: bytes) -> Optional[str]:
         return None
 
 
-def _extract_doc_text(data: bytes) -> Optional[str]:
+def _extract_doc_text(data: bytes) -> Optional[str]:  # pragma: no cover - requires optional olefile
     """Extract text from a legacy Word .doc file (requires olefile).
 
     Reads every OLE stream and extracts printable UTF-16 LE and ASCII runs,
@@ -987,7 +991,7 @@ def _extract_doc_text(data: bytes) -> Optional[str]:
         return None
 
 
-def _extract_pdf_text(data: bytes) -> Optional[str]:
+def _extract_pdf_text(data: bytes) -> Optional[str]:  # pragma: no cover - requires optional pdfminer.six
     """Extract the text layer from a text-based PDF (requires pdfminer.six)."""
     if not _PDF_AVAILABLE:
         return None
@@ -998,7 +1002,7 @@ def _extract_pdf_text(data: bytes) -> Optional[str]:
         return None
 
 
-def _extract_msg_text(data: bytes) -> Optional[str]:
+def _extract_msg_text(data: bytes) -> Optional[str]:  # pragma: no cover - requires optional extract-msg
     """Extract headers and body from an Outlook .msg file (requires extract-msg)."""
     if not _MSG_AVAILABLE:
         return None
@@ -1018,7 +1022,7 @@ def _extract_msg_text(data: bytes) -> Optional[str]:
         return None
 
 
-def _extract_parquet_text(data: bytes) -> Optional[str]:
+def _extract_parquet_text(data: bytes) -> Optional[str]:  # pragma: no cover - requires optional pyarrow
     """Extract all cell values from a Parquet file as text (requires pyarrow)."""
     if not _PYARROW_AVAILABLE:
         return None
@@ -1034,7 +1038,7 @@ def _extract_parquet_text(data: bytes) -> Optional[str]:
         return None
 
 
-def _extract_orc_text(data: bytes) -> Optional[str]:
+def _extract_orc_text(data: bytes) -> Optional[str]:  # pragma: no cover - requires optional pyarrow
     """Extract all cell values from an ORC file as text (requires pyarrow)."""
     if not _PYARROW_AVAILABLE:
         return None
@@ -1049,7 +1053,7 @@ def _extract_orc_text(data: bytes) -> Optional[str]:
         return None
 
 
-def _extract_avro_text(data: bytes) -> Optional[str]:
+def _extract_avro_text(data: bytes) -> Optional[str]:  # pragma: no cover - requires optional fastavro
     """Deserialise an Avro container and extract all field values as text (requires fastavro)."""
     if not _AVRO_AVAILABLE:
         return None
@@ -1251,7 +1255,9 @@ def _scan_jwt_payloads(
     """Decode JWT payload segments on a line and scan them for PII."""
     out: list[Finding] = []
     for m in _JWT_PAYLOAD_RE.finditer(line):
-        payload_b64 = m.group(1).replace("-", "+").replace("_", "/")
+        # group(1) captures the payload *after* the literal "eyJ" prefix — restore
+        # it so the segment decodes to the original JSON (base64 is offset-sensitive).
+        payload_b64 = ("eyJ" + m.group(1)).replace("-", "+").replace("_", "/")
         payload_b64 += "=" * (-len(payload_b64) % 4)
         try:
             decoded = base64.b64decode(payload_b64).decode("utf-8", errors="replace")
