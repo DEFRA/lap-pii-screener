@@ -543,63 +543,123 @@ def _extract_ner_findings(file_rel: str, content: str, show_secrets: bool = Fals
     if len(line_chunks) < 3 or not has_prose:
         return []
 
+def _presidio_person_findings(
+    file_rel: str, lineno: int, chunk: str, threshold: float, show_secrets: bool
+) -> list[Finding]:
+    """Return Presidio PERSON findings for a single text chunk."""
+    if not (_PRESIDIO_AVAILABLE and _PRESIDIO_ANALYZER is not None):
+        return []
+    results = _PRESIDIO_ANALYZER.analyze(
+        text=chunk[:500], language="en", entities=["PERSON"]
+    )
+    out: list[Finding] = []
+    for r in results:
+        if r.score < threshold:
+            continue
+        name = chunk[r.start:r.end].strip()
+        if not _NAME_RE.match(name):
+            continue
+        category = "pii_person_name"
+        rule = _ENGINE.lookup(category)
+        out.append(Finding(
+            id=Finding.make_id(file_rel, lineno, "presidio_person"),
+            scanners=["pii"],
+            category=category,
+            severity="medium",
+            confidence=round(r.score, 4),
+            file=file_rel,
+            line=lineno,
+            match=name if show_secrets else Finding.redact(name),
+            rule_id="presidio_person_name",
+            message=(
+                f"Person name detected (Presidio, score={r.score:.2f}): "
+                f"{name if show_secrets else Finding.redact(name)}"
+            ),
+            remediation_description=rule.description if rule else "",
+            fix_steps=rule.fix_steps if rule else [],
+            references=rule.references if rule else [],
+            regulations=_REG_ENGINE.lookup(category),
+        ))
+    return out
+
+
+def _spacy_person_findings(
+    file_rel: str, lineno: int, chunk: str, show_secrets: bool
+) -> list[Finding]:
+    """Return spaCy PERSON findings for a single text chunk."""
+    if not (_SPACY_AVAILABLE and _NLP is not None):
+        return []
+    doc = _NLP(chunk[:300])
+    out: list[Finding] = []
+    for ent in doc.ents:
+        if ent.label_ != "PERSON" or not _NAME_RE.match(ent.text):
+            continue
+        category = "pii_person_name"
+        rule = _ENGINE.lookup(category)
+        out.append(Finding(
+            id=Finding.make_id(file_rel, lineno, "spacy_person"),
+            scanners=["pii"],
+            category=category,
+            severity="low",
+            confidence=0.65,
+            file=file_rel,
+            line=lineno,
+            match=ent.text if show_secrets else Finding.redact(ent.text),
+            rule_id="spacy_person_name",
+            message=(
+                f"Possible person name detected: "
+                f"{ent.text if show_secrets else Finding.redact(ent.text)}"
+            ),
+            remediation_description=rule.description if rule else "",
+            fix_steps=rule.fix_steps if rule else [],
+            references=rule.references if rule else [],
+            regulations=_REG_ENGINE.lookup(category),
+        ))
+    return out
+
+
+def _extract_ner_findings(file_rel: str, content: str, show_secrets: bool = False, skip_comments: bool = False) -> list[Finding]:
+    """Run NER on string literal / comment text; flag plausible PERSON entities.
+
+    Uses Presidio when available (score-based), falls back to spaCy (low
+    severity).  CSV/TSV/PSV files are skipped here because _scan_csv_columns
+    handles them with column-context awareness.
+
+    Confidence threshold is raised to _NER_THRESHOLD_CODE (0.80) for source
+    code files (see _CODE_EXTENSIONS) to suppress false positives from code
+    identifiers that resemble names.  Comment and string-literal text from
+    code files is still fully scanned — author tags, TODO comments, and
+    hardcoded names in string literals are all covered.
+    """
+    suffix = Path(file_rel).suffix.lower()
+    if suffix in _CSV_EXTENSIONS:
+        return []
+    _ensure_presidio()
+    _ensure_spacy()
+    if not _PRESIDIO_AVAILABLE and (not _SPACY_AVAILABLE or _NLP is None):
+        return []
+
+    threshold = _NER_THRESHOLD_CODE if suffix in _CODE_EXTENSIONS else _NER_THRESHOLD_PROSE
+
+    # Collect all chunks first so we can skip NER on files with very little
+    # extractable prose — avoids paying model inference cost on files that are
+    # almost entirely code tokens (imports, braces, short identifiers).
+    line_chunks: list[tuple[int, str]] = []  # (lineno, chunk)
+    for lineno, line in enumerate(content.splitlines(), start=1):
+        for chunk in _text_chunks_from_line(line, skip_comments=skip_comments):
+            line_chunks.append((lineno, chunk))
+
+    # Minimum 3 chunks AND at least one chunk with 2+ words before paying NER cost.
+    has_prose = any(len(chunk.split()) >= 2 for _, chunk in line_chunks)
+    if len(line_chunks) < 3 or not has_prose:
+        return []
+
     findings: list[Finding] = []
     for lineno, chunk in line_chunks:
-        if _PRESIDIO_AVAILABLE and _PRESIDIO_ANALYZER is not None:
-            results = _PRESIDIO_ANALYZER.analyze(
-                text=chunk[:500], language="en", entities=["PERSON"]
-            )
-            for r in results:
-                if r.score < threshold:
-                    continue
-                name = chunk[r.start:r.end].strip()
-                if not _NAME_RE.match(name):
-                    continue
-                category = "pii_person_name"
-                rule = _ENGINE.lookup(category)
-                findings.append(Finding(
-                    id=Finding.make_id(file_rel, lineno, "presidio_person"),
-                    scanners=["pii"],
-                    category=category,
-                    severity="medium",
-                    confidence=round(r.score, 4),
-                    file=file_rel,
-                    line=lineno,
-                    match=name if show_secrets else Finding.redact(name),
-                    rule_id="presidio_person_name",
-                    message=f"Person name detected (Presidio, score={r.score:.2f}): "
-                            f"{name if show_secrets else Finding.redact(name)}",
-                    remediation_description=rule.description if rule else "",
-                    fix_steps=rule.fix_steps if rule else [],
-                    references=rule.references if rule else [],
-                    regulations=_REG_ENGINE.lookup(category),
-                ))
-        elif _SPACY_AVAILABLE and _NLP is not None:
-            doc = _NLP(chunk[:300])
-            for ent in doc.ents:
-                if ent.label_ != "PERSON":
-                    continue
-                if not _NAME_RE.match(ent.text):
-                    continue
-                category = "pii_person_name"
-                rule = _ENGINE.lookup(category)
-                findings.append(Finding(
-                    id=Finding.make_id(file_rel, lineno, "spacy_person"),
-                    scanners=["pii"],
-                    category=category,
-                    severity="low",
-                    confidence=0.65,
-                    file=file_rel,
-                    line=lineno,
-                    match=ent.text if show_secrets else Finding.redact(ent.text),
-                    rule_id="spacy_person_name",
-                    message=f"Possible person name detected: "
-                            f"{ent.text if show_secrets else Finding.redact(ent.text)}",
-                    remediation_description=rule.description if rule else "",
-                    fix_steps=rule.fix_steps if rule else [],
-                    references=rule.references if rule else [],
-                    regulations=_REG_ENGINE.lookup(category),
-                ))
+        if _PRESIDIO_AVAILABLE:
+            findings.extend(_presidio_person_findings(file_rel, lineno, chunk, threshold, show_secrets))
+        else:
+            findings.extend(_spacy_person_findings(file_rel, lineno, chunk, show_secrets))
 
     return findings
 
@@ -607,6 +667,51 @@ def _extract_ner_findings(file_rel: str, content: str, show_secrets: bool = Fals
 # ─── CSV / TSV column-context name scanner ────────────────────────────────────
 
 _CSV_EXTENSIONS = {".csv", ".tsv", ".psv"}
+
+
+def _detect_csv_delimiter(lines_raw: list[str], ext: str) -> str:
+    """Return the most likely delimiter character for a CSV/TSV/PSV file."""
+    if ext == ".tsv":
+        return "\t"
+    if ext == ".psv":
+        return "|"
+    first_meaningful = next(
+        (l for l in lines_raw if l.strip() and not set(l.strip()) <= {"-", "|", "=", " "}),
+        "",
+    )
+    candidates = {
+        ",": first_meaningful.count(","),
+        "\t": first_meaningful.count("\t"),
+        "|": first_meaningful.count("|"),
+    }
+    best = max(candidates, key=lambda d: candidates[d])
+    return best if candidates[best] > 0 else ","
+
+
+def _find_csv_header_row(rows: list[list[str]]) -> int:
+    """Return the index of the first non-blank, non-separator row."""
+    for i, row in enumerate(rows):
+        if row and any(
+            c.strip() and not set(c.strip()) <= {"-", "|", "="}
+            for c in row
+        ):
+            return i
+    return 0
+
+
+def _classify_name_columns(headers: list[str]) -> tuple[list[int], list[int]]:
+    """Return (strict_indices, broad_indices) for columns that may contain person names."""
+    strict: list[int] = []
+    broad: list[int] = []
+    for i, h in enumerate(headers):
+        h_s = h.strip()
+        if _SKIP_NAME_COL_RE.search(h_s):
+            continue
+        if _NAME_COLUMN_RE.match(h_s):
+            strict.append(i)
+        elif _BROAD_NAME_COLUMN_RE.search(h_s):
+            broad.append(i)
+    return strict, broad
 
 
 def _scan_csv_columns(file_rel: str, content: str, show_secrets: bool) -> list[Finding]:
@@ -627,28 +732,7 @@ def _scan_csv_columns(file_rel: str, content: str, show_secrets: bool) -> list[F
         return []
 
     ext = Path(file_rel).suffix.lower()
-
-    # ── Delimiter detection ────────────────────────────────────────────────────
-    # Use the first non-blank, non-separator line so that exports whose first
-    # line is blank (e.g. Pega pipe-delimited CSVs) are handled correctly.
-    first_meaningful = next(
-        (l for l in lines_raw
-         if l.strip() and not set(l.strip()) <= {"-", "|", "=", " "}),
-        "",
-    )
-    if ext == ".tsv":
-        delimiter = "\t"
-    elif ext == ".psv":
-        delimiter = "|"
-    else:
-        candidates = {
-            ",": first_meaningful.count(","),
-            "\t": first_meaningful.count("\t"),
-            "|": first_meaningful.count("|"),
-        }
-        delimiter = max(candidates, key=lambda d: candidates[d])
-        if candidates[delimiter] == 0:
-            delimiter = ","
+    delimiter = _detect_csv_delimiter(lines_raw, ext)
 
     # ── Parse ──────────────────────────────────────────────────────────────────
     try:
@@ -656,17 +740,7 @@ def _scan_csv_columns(file_rel: str, content: str, show_secrets: bool) -> list[F
     except csv.Error:
         rows = []
 
-    # ── Find the real header row ───────────────────────────────────────────────
-    # Skip blank rows and separator rows (cells that are entirely dashes/pipes).
-    header_row_idx = 0
-    for i, row in enumerate(rows):
-        if row and any(
-            c.strip() and not set(c.strip()) <= {"-", "|", "="}
-            for c in row
-        ):
-            header_row_idx = i
-            break
-
+    header_row_idx = _find_csv_header_row(rows)
     if header_row_idx >= len(rows) - 1:
         return []  # no data rows after header
 
@@ -683,30 +757,13 @@ def _scan_csv_columns(file_rel: str, content: str, show_secrets: bool) -> list[F
         misaligned = sum(1 for r in data_sample if len(r) != expected_cols)
         if misaligned > max(1, len(data_sample) // 4):
             rows = [line.split(delimiter) for line in lines_raw if line.strip()]
-            header_row_idx = 0
-            for i, row in enumerate(rows):
-                if row and any(
-                    c.strip() and not set(c.strip()) <= {"-", "|", "="}
-                    for c in row
-                ):
-                    header_row_idx = i
-                    break
+            header_row_idx = _find_csv_header_row(rows)
             headers = rows[header_row_idx]
 
     if len(rows) <= header_row_idx + 1:
         return []
 
-    # ── Identify columns ───────────────────────────────────────────────────────
-    strict_col_indices: list[int] = []
-    broad_col_indices: list[int] = []
-    for i, h in enumerate(headers):
-        h_s = h.strip()
-        if _SKIP_NAME_COL_RE.search(h_s):
-            continue
-        if _NAME_COLUMN_RE.match(h_s):
-            strict_col_indices.append(i)
-        elif _BROAD_NAME_COLUMN_RE.search(h_s):
-            broad_col_indices.append(i)
+    strict_col_indices, broad_col_indices = _classify_name_columns(headers)
 
     ner_available = _PRESIDIO_AVAILABLE or (_SPACY_AVAILABLE and _NLP is not None)
     if not ner_available:
@@ -1061,6 +1118,25 @@ def _should_scan_name(name: str) -> bool:
     return suffix in _TEXT_EXTENSIONS or suffix in _BINARY_DOC_EXTENSIONS
 
 
+def _yield_zip_members(buf: io.BytesIO) -> Iterator[tuple[str, bytes]]:
+    with zipfile.ZipFile(buf) as zf:
+        for info in zf.infolist():
+            if not info.is_dir():
+                try:
+                    yield info.filename, zf.read(info)
+                except (zipfile.BadZipFile, OSError, KeyError):
+                    pass
+
+
+def _yield_tar_members(buf: io.BytesIO, mode: str) -> Iterator[tuple[str, bytes]]:
+    with tarfile.open(fileobj=buf, mode=mode) as tf:
+        for member in tf.getmembers():
+            if member.isfile():
+                f = tf.extractfile(member)
+                if f:
+                    yield member.name, f.read()
+
+
 def _iter_archive_members(archive_name: str, data: bytes) -> Iterator[tuple[str, bytes]]:
     """Yield (member_name, member_bytes) for every file entry in an archive."""
     lower = archive_name.lower()
@@ -1068,47 +1144,17 @@ def _iter_archive_members(archive_name: str, data: bytes) -> Iterator[tuple[str,
 
     try:
         if lower.endswith(".zip"):
-            with zipfile.ZipFile(buf) as zf:
-                for info in zf.infolist():
-                    if not info.is_dir():
-                        try:
-                            yield info.filename, zf.read(info)
-                        except (zipfile.BadZipFile, OSError, KeyError):
-                            pass
-
+            yield from _yield_zip_members(buf)
         elif lower.endswith((_TAR_GZ, ".tgz")):
-            with tarfile.open(fileobj=buf, mode="r:gz") as tf:
-                for member in tf.getmembers():
-                    if member.isfile():
-                        f = tf.extractfile(member)
-                        if f:
-                            yield member.name, f.read()
-
+            yield from _yield_tar_members(buf, "r:gz")
         elif lower.endswith(_TAR_BZ2):
-            with tarfile.open(fileobj=buf, mode="r:bz2") as tf:
-                for member in tf.getmembers():
-                    if member.isfile():
-                        f = tf.extractfile(member)
-                        if f:
-                            yield member.name, f.read()
-
+            yield from _yield_tar_members(buf, "r:bz2")
         elif lower.endswith(".tar"):
-            with tarfile.open(fileobj=buf, mode="r:") as tf:
-                for member in tf.getmembers():
-                    if member.isfile():
-                        f = tf.extractfile(member)
-                        if f:
-                            yield member.name, f.read()
-
+            yield from _yield_tar_members(buf, "r:")
         elif lower.endswith(".gz"):
-            # Single-file gzip (not .tar.gz — handled above)
-            inner_name = archive_name[:-3]  # strip .gz suffix
-            yield inner_name, gzip.decompress(data)
-
+            yield archive_name[:-3], gzip.decompress(data)
         elif lower.endswith(".bz2"):
-            inner_name = archive_name[:-4]  # strip .bz2 suffix
-            yield inner_name, bz2.decompress(data)
-
+            yield archive_name[:-4], bz2.decompress(data)
     except (zipfile.BadZipFile, tarfile.TarError, OSError) as exc:
         print(f"[pii_scanner] Could not open archive {archive_name!r}: {exc}", file=sys.stderr)
 
