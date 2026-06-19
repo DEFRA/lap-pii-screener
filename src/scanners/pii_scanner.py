@@ -504,44 +504,30 @@ def _text_chunks_from_line(line: str, skip_comments: bool = False) -> list[str]:
     return chunks
 
 
-def _extract_ner_findings(file_rel: str, content: str, show_secrets: bool = False, skip_comments: bool = False) -> list[Finding]:
-    """Run NER on string literal / comment text; flag plausible PERSON entities.
-
-    Uses Presidio when available (score-based), falls back to spaCy (low
-    severity).  CSV/TSV/PSV files are skipped here because _scan_csv_columns
-    handles them with column-context awareness.
-
-    Confidence threshold is raised to _NER_THRESHOLD_CODE (0.80) for source
-    code files (see _CODE_EXTENSIONS) to suppress false positives from code
-    identifiers that resemble names.  Comment and string-literal text from
-    code files is still fully scanned — author tags, TODO comments, and
-    hardcoded names in string literals are all covered.
-    """
-    suffix = Path(file_rel).suffix.lower()
-    if suffix in _CSV_EXTENSIONS:
-        return []
-    _ensure_presidio()
-    _ensure_spacy()
-    if not _PRESIDIO_AVAILABLE and (not _SPACY_AVAILABLE or _NLP is None):
-        return []
-
-    threshold = _NER_THRESHOLD_CODE if suffix in _CODE_EXTENSIONS else _NER_THRESHOLD_PROSE
-
-    # Collect all chunks first so we can skip NER on files with very little
-    # extractable prose — avoids paying model inference cost on files that are
-    # almost entirely code tokens (imports, braces, short identifiers).
-    line_chunks: list[tuple[int, str]] = []  # (lineno, chunk)
-    for lineno, line in enumerate(content.splitlines(), start=1):
-        for chunk in _text_chunks_from_line(line, skip_comments=skip_comments):
-            line_chunks.append((lineno, chunk))
-
-    # Minimum 3 chunks AND at least one chunk with 2+ words before paying NER cost.
-    has_prose = any(
-        len(chunk.split()) >= 2
-        for _, chunk in line_chunks
+def _build_presidio_finding(
+    file_rel: str, lineno: int, name: str, score: float, show_secrets: bool
+) -> Finding:
+    """Construct a Presidio PERSON Finding."""
+    category = "pii_person_name"
+    rule = _ENGINE.lookup(category)
+    display = name if show_secrets else Finding.redact(name)
+    return Finding(
+        id=Finding.make_id(file_rel, lineno, "presidio_person"),
+        scanners=["pii"],
+        category=category,
+        severity="medium",
+        confidence=round(score, 4),
+        file=file_rel,
+        line=lineno,
+        match=display,
+        rule_id="presidio_person_name",
+        message=f"Person name detected (Presidio, score={score:.2f}): {display}",
+        remediation_description=rule.description if rule else "",
+        fix_steps=rule.fix_steps if rule else [],
+        references=rule.references if rule else [],
+        regulations=_REG_ENGINE.lookup(category),
     )
-    if len(line_chunks) < 3 or not has_prose:
-        return []
+
 
 def _presidio_person_findings(
     file_rel: str, lineno: int, chunk: str, threshold: float, show_secrets: bool
@@ -559,28 +545,33 @@ def _presidio_person_findings(
         name = chunk[r.start:r.end].strip()
         if not _NAME_RE.match(name):
             continue
-        category = "pii_person_name"
-        rule = _ENGINE.lookup(category)
-        out.append(Finding(
-            id=Finding.make_id(file_rel, lineno, "presidio_person"),
-            scanners=["pii"],
-            category=category,
-            severity="medium",
-            confidence=round(r.score, 4),
-            file=file_rel,
-            line=lineno,
-            match=name if show_secrets else Finding.redact(name),
-            rule_id="presidio_person_name",
-            message=(
-                f"Person name detected (Presidio, score={r.score:.2f}): "
-                f"{name if show_secrets else Finding.redact(name)}"
-            ),
-            remediation_description=rule.description if rule else "",
-            fix_steps=rule.fix_steps if rule else [],
-            references=rule.references if rule else [],
-            regulations=_REG_ENGINE.lookup(category),
-        ))
+        out.append(_build_presidio_finding(file_rel, lineno, name, r.score, show_secrets))
     return out
+
+
+def _build_spacy_finding(
+    file_rel: str, lineno: int, text: str, show_secrets: bool
+) -> Finding:
+    """Construct a spaCy PERSON Finding."""
+    category = "pii_person_name"
+    rule = _ENGINE.lookup(category)
+    display = text if show_secrets else Finding.redact(text)
+    return Finding(
+        id=Finding.make_id(file_rel, lineno, "spacy_person"),
+        scanners=["pii"],
+        category=category,
+        severity="low",
+        confidence=0.65,
+        file=file_rel,
+        line=lineno,
+        match=display,
+        rule_id="spacy_person_name",
+        message=f"Possible person name detected: {display}",
+        remediation_description=rule.description if rule else "",
+        fix_steps=rule.fix_steps if rule else [],
+        references=rule.references if rule else [],
+        regulations=_REG_ENGINE.lookup(category),
+    )
 
 
 def _spacy_person_findings(
@@ -594,27 +585,7 @@ def _spacy_person_findings(
     for ent in doc.ents:
         if ent.label_ != "PERSON" or not _NAME_RE.match(ent.text):
             continue
-        category = "pii_person_name"
-        rule = _ENGINE.lookup(category)
-        out.append(Finding(
-            id=Finding.make_id(file_rel, lineno, "spacy_person"),
-            scanners=["pii"],
-            category=category,
-            severity="low",
-            confidence=0.65,
-            file=file_rel,
-            line=lineno,
-            match=ent.text if show_secrets else Finding.redact(ent.text),
-            rule_id="spacy_person_name",
-            message=(
-                f"Possible person name detected: "
-                f"{ent.text if show_secrets else Finding.redact(ent.text)}"
-            ),
-            remediation_description=rule.description if rule else "",
-            fix_steps=rule.fix_steps if rule else [],
-            references=rule.references if rule else [],
-            regulations=_REG_ENGINE.lookup(category),
-        ))
+        out.append(_build_spacy_finding(file_rel, lineno, ent.text, show_secrets))
     return out
 
 
@@ -714,6 +685,116 @@ def _classify_name_columns(headers: list[str]) -> tuple[list[int], list[int]]:
     return strict, broad
 
 
+def _is_separator_row(row: list[str]) -> bool:
+    """True if every cell is empty or contains only separator punctuation."""
+    return all(set(c.strip()) <= {"-", "|", "="} for c in row)
+
+
+def _csv_ner_available() -> bool:
+    """Return True if NER (Presidio or spaCy) is available, loading lazily."""
+    available = _PRESIDIO_AVAILABLE or (_SPACY_AVAILABLE and _NLP is not None)
+    if not available:
+        _ensure_presidio()
+        _ensure_spacy()
+        available = _PRESIDIO_AVAILABLE or (_SPACY_AVAILABLE and _NLP is not None)
+    return available
+
+
+def _make_name_finding(
+    file_rel: str, row_idx: int, value: str, show_secrets: bool,
+    id_suffix: str, rule_id: str, message: str,
+) -> Finding:
+    """Build a person-name Finding for a CSV column cell."""
+    category = "pii_person_name"
+    rule = _ENGINE.lookup(category)
+    return Finding(
+        id=Finding.make_id(file_rel, row_idx, id_suffix),
+        scanners=["pii"],
+        category=category,
+        severity="medium",
+        file=file_rel,
+        line=row_idx,
+        match=value if show_secrets else Finding.redact(value),
+        rule_id=rule_id,
+        message=message,
+        remediation_description=rule.description if rule else "",
+        fix_steps=rule.fix_steps if rule else [],
+        references=rule.references if rule else [],
+        regulations=_REG_ENGINE.lookup(category),
+    )
+
+
+def _strict_column_findings(
+    file_rel: str, headers: list[str], row: list[str], row_idx: int,
+    strict_col_indices: list[int], show_secrets: bool,
+) -> list[Finding]:
+    """Flag every Title-case value in strict name columns (no NER required)."""
+    out: list[Finding] = []
+    for col_idx in strict_col_indices:
+        if col_idx >= len(row):
+            continue
+        value = row[col_idx].strip()
+        if not _NAME_RE_LABELED.match(value):
+            continue
+        col_header = headers[col_idx].strip()
+        out.append(_make_name_finding(
+            file_rel, row_idx, value, show_secrets,
+            "pii_person_name_column", "pii_person_name_column",
+            f"Person name in '{col_header}' column.",
+        ))
+    return out
+
+
+def _broad_column_findings(
+    file_rel: str, headers: list[str], row: list[str], row_idx: int,
+    broad_col_indices: list[int], show_secrets: bool,
+) -> list[Finding]:
+    """Flag NER-confirmed person names in broad name columns."""
+    out: list[Finding] = []
+    for col_idx in broad_col_indices:
+        if col_idx >= len(row):
+            continue
+        value = row[col_idx].strip()
+        if len(value) < 4:
+            continue
+        # Cheap structural pre-filter: must have at least two capitalised
+        # words before paying the cost of an NER call.
+        if not re.search(r'[A-Z][a-z]{1,25}\s[A-Z][a-z]{1,25}', value):
+            continue
+        if not _ner_confirm_person(value):
+            continue
+        col_header = headers[col_idx].strip()
+        out.append(_make_name_finding(
+            file_rel, row_idx, value, show_secrets,
+            f"ner_broad_{col_idx}", "pii_person_name_operator_col",
+            f"Person name in '{col_header}' column (NER-confirmed).",
+        ))
+    return out
+
+
+def _reparse_csv_if_misaligned(
+    rows: list[list[str]], lines_raw: list[str], delimiter: str, header_row_idx: int,
+) -> tuple[list[list[str]], int, list[str]]:
+    """Re-parse with a plain split when csv.reader badly misaligns columns.
+
+    If >25% of data rows have the wrong column count, fall back to a naive split.
+    Returns the (possibly re-parsed) rows, header row index and header list.
+    """
+    headers = rows[header_row_idx]
+    data_sample = [
+        r for r in rows[header_row_idx + 1:]
+        if r and not _is_separator_row(r)
+    ]
+    if data_sample:
+        expected_cols = len(headers)
+        misaligned = sum(1 for r in data_sample if len(r) != expected_cols)
+        if misaligned > max(1, len(data_sample) // 4):
+            rows = [line.split(delimiter) for line in lines_raw if line.strip()]
+            header_row_idx = _find_csv_header_row(rows)
+            headers = rows[header_row_idx]
+    return rows, header_row_idx, headers
+
+
 def _scan_csv_columns(file_rel: str, content: str, show_secrets: bool) -> list[Finding]:
     """Scan CSV/TSV/PSV files using column-header context to locate person names.
 
@@ -744,100 +825,30 @@ def _scan_csv_columns(file_rel: str, content: str, show_secrets: bool) -> list[F
     if header_row_idx >= len(rows) - 1:
         return []  # no data rows after header
 
-    headers = rows[header_row_idx]
-
-    # Fallback: if csv.reader badly misaligns columns (>25% of data rows have
-    # wrong column count), re-parse with a plain split.
-    data_sample = [
-        r for r in rows[header_row_idx + 1:]
-        if r and not all(set(c.strip()) <= {"-", "|", "="} for c in r)
-    ]
-    if data_sample:
-        expected_cols = len(headers)
-        misaligned = sum(1 for r in data_sample if len(r) != expected_cols)
-        if misaligned > max(1, len(data_sample) // 4):
-            rows = [line.split(delimiter) for line in lines_raw if line.strip()]
-            header_row_idx = _find_csv_header_row(rows)
-            headers = rows[header_row_idx]
+    rows, header_row_idx, headers = _reparse_csv_if_misaligned(
+        rows, lines_raw, delimiter, header_row_idx
+    )
 
     if len(rows) <= header_row_idx + 1:
         return []
 
     strict_col_indices, broad_col_indices = _classify_name_columns(headers)
 
-    ner_available = _PRESIDIO_AVAILABLE or (_SPACY_AVAILABLE and _NLP is not None)
-    if not ner_available:
-        _ensure_presidio()
-        _ensure_spacy()
-        ner_available = _PRESIDIO_AVAILABLE or (_SPACY_AVAILABLE and _NLP is not None)
+    ner_available = _csv_ner_available()
     if not strict_col_indices and (not broad_col_indices or not ner_available):
         return []
 
     findings: list[Finding] = []
-
     for row_idx, row in enumerate(rows[header_row_idx + 1:], start=header_row_idx + 2):
         # Skip separator rows in the data
-        if not row or all(set(c.strip()) <= {"-", "|", "="} for c in row):
+        if not row or _is_separator_row(row):
             continue
-
-        # ── Strict columns ─────────────────────────────────────────────────────
-        for col_idx in strict_col_indices:
-            if col_idx >= len(row):
-                continue
-            value = row[col_idx].strip()
-            if not _NAME_RE_LABELED.match(value):
-                continue
-            col_header = headers[col_idx].strip()
-            category = "pii_person_name"
-            rule = _ENGINE.lookup(category)
-            findings.append(Finding(
-                id=Finding.make_id(file_rel, row_idx, "pii_person_name_column"),
-                scanners=["pii"],
-                category=category,
-                severity="medium",
-                file=file_rel,
-                line=row_idx,
-                match=value if show_secrets else Finding.redact(value),
-                rule_id="pii_person_name_column",
-                message=f"Person name in '{col_header}' column.",
-                remediation_description=rule.description if rule else "",
-                fix_steps=rule.fix_steps if rule else [],
-                references=rule.references if rule else [],
-                regulations=_REG_ENGINE.lookup(category),
-            ))
-
-        # ── Broad columns (NER-confirmed) ──────────────────────────────────────
-        if not ner_available:
-            continue
-        for col_idx in broad_col_indices:
-            if col_idx >= len(row):
-                continue
-            value = row[col_idx].strip()
-            if len(value) < 4:
-                continue
-            # Cheap structural pre-filter: must have at least two capitalised
-            # words before paying the cost of an NER call.
-            if not re.search(r'[A-Z][a-z]{1,25}\s[A-Z][a-z]{1,25}', value):
-                continue
-            if not _ner_confirm_person(value):
-                continue
-            col_header = headers[col_idx].strip()
-            category = "pii_person_name"
-            rule = _ENGINE.lookup(category)
-            findings.append(Finding(
-                id=Finding.make_id(file_rel, row_idx, f"ner_broad_{col_idx}"),
-                scanners=["pii"],
-                category=category,
-                severity="medium",
-                file=file_rel,
-                line=row_idx,
-                match=value if show_secrets else Finding.redact(value),
-                rule_id="pii_person_name_operator_col",
-                message=f"Person name in '{col_header}' column (NER-confirmed).",
-                remediation_description=rule.description if rule else "",
-                fix_steps=rule.fix_steps if rule else [],
-                references=rule.references if rule else [],
-                regulations=_REG_ENGINE.lookup(category),
+        findings.extend(_strict_column_findings(
+            file_rel, headers, row, row_idx, strict_col_indices, show_secrets
+        ))
+        if ner_available:
+            findings.extend(_broad_column_findings(
+                file_rel, headers, row, row_idx, broad_col_indices, show_secrets
             ))
 
     return findings
@@ -1171,6 +1182,39 @@ _JWT_PAYLOAD_RE = re.compile(
 )
 
 
+def _findings_for_pattern(
+    file_rel: str, lineno: int, text: str, show_secrets: bool, source_tag: str, pat,
+) -> list[Finding]:
+    """Run a single PII pattern against a decoded text chunk."""
+    rule_id, category, severity, pattern, validator = pat
+    rule = _ENGINE.lookup(category)
+    out: list[Finding] = []
+    for match in pattern.finditer(text):
+        matched_text = match.group(0)
+        if validator and not validator(matched_text):
+            continue
+        display = matched_text if show_secrets else Finding.redact(matched_text)
+        out.append(Finding(
+            id=Finding.make_id(file_rel, lineno, f"{rule_id}_{source_tag}"),
+            scanners=["pii"],
+            category=category,
+            severity=severity,
+            file=file_rel,
+            line=lineno,
+            match=display,
+            rule_id=rule_id,
+            message=(
+                f"{category.replace('_', ' ').title()} detected in "
+                f"{source_tag.replace('_', ' ')} payload."
+            ),
+            remediation_description=rule.description if rule else "",
+            fix_steps=rule.fix_steps if rule else [],
+            references=rule.references if rule else [],
+            regulations=_REG_ENGINE.lookup(category),
+        ))
+    return out
+
+
 def _scan_chunk_for_pii(
     file_rel: str,
     lineno: int,
@@ -1180,31 +1224,63 @@ def _scan_chunk_for_pii(
 ) -> list[Finding]:
     """Run all regex PII patterns against a decoded text chunk."""
     results: list[Finding] = []
-    for rule_id, category, severity, pattern, validator in _PATTERNS:
-        for match in pattern.finditer(text):
-            matched_text = match.group(0)
-            if validator and not validator(matched_text):
-                continue
-            rule = _ENGINE.lookup(category)
-            results.append(Finding(
-                id=Finding.make_id(file_rel, lineno, f"{rule_id}_{source_tag}"),
-                scanners=["pii"],
-                category=category,
-                severity=severity,
-                file=file_rel,
-                line=lineno,
-                match=matched_text if show_secrets else Finding.redact(matched_text),
-                rule_id=rule_id,
-                message=(
-                    f"{category.replace('_', ' ').title()} detected in "
-                    f"{source_tag.replace('_', ' ')} payload."
-                ),
-                remediation_description=rule.description if rule else "",
-                fix_steps=rule.fix_steps if rule else [],
-                references=rule.references if rule else [],
-                regulations=_REG_ENGINE.lookup(category),
-            ))
+    for pat in _PATTERNS:
+        results.extend(
+            _findings_for_pattern(file_rel, lineno, text, show_secrets, source_tag, pat)
+        )
     return results
+
+
+def _scan_url_encoded(
+    file_rel: str, lineno: int, line: str, show_secrets: bool
+) -> list[Finding]:
+    """Decode URL percent-encoded substrings on a line and scan them for PII."""
+    out: list[Finding] = []
+    for m in _URL_ENCODED_RE.finditer(line):
+        decoded = urllib.parse.unquote(m.group(0))
+        if decoded != m.group(0):
+            out.extend(
+                _scan_chunk_for_pii(file_rel, lineno, decoded, show_secrets, "url_decoded")
+            )
+    return out
+
+
+def _scan_jwt_payloads(
+    file_rel: str, lineno: int, line: str, show_secrets: bool
+) -> list[Finding]:
+    """Decode JWT payload segments on a line and scan them for PII."""
+    out: list[Finding] = []
+    for m in _JWT_PAYLOAD_RE.finditer(line):
+        payload_b64 = m.group(1).replace("-", "+").replace("_", "/")
+        payload_b64 += "=" * (-len(payload_b64) % 4)
+        try:
+            decoded = base64.b64decode(payload_b64).decode("utf-8", errors="replace")
+        except ValueError:
+            continue
+        out.extend(
+            _scan_chunk_for_pii(file_rel, lineno, decoded, show_secrets, "jwt_payload")
+        )
+    return out
+
+
+def _scan_base64_blobs(
+    file_rel: str, lineno: int, line: str, show_secrets: bool
+) -> list[Finding]:
+    """Decode generic Base64 blobs on a line and scan them for PII."""
+    out: list[Finding] = []
+    for m in _BASE64_BLOB_RE.finditer(line):
+        blob = m.group(0)
+        padded = blob + "=" * (-len(blob) % 4)
+        try:
+            decoded_bytes = base64.b64decode(padded.encode(), validate=True)
+            decoded = decoded_bytes.decode("utf-8")  # strict — rejects binary blobs
+        except ValueError:
+            continue  # not valid UTF-8 base64 — skip silently
+        if len(decoded) >= 8 and any(c.isprintable() and not c.isspace() for c in decoded[:20]):
+            out.extend(
+                _scan_chunk_for_pii(file_rel, lineno, decoded, show_secrets, "base64_decoded")
+            )
+    return out
 
 
 def _scan_decoded_payloads(
@@ -1213,42 +1289,43 @@ def _scan_decoded_payloads(
     """Decode Base64, URL-encoded, and JWT payloads found in content, then scan for PII."""
     findings: list[Finding] = []
     for lineno, line in enumerate(content.splitlines(), start=1):
-
-        # ── URL-encoded strings ────────────────────────────────────────────────
-        for m in _URL_ENCODED_RE.finditer(line):
-            decoded = urllib.parse.unquote(m.group(0))
-            if decoded != m.group(0):
-                findings.extend(
-                    _scan_chunk_for_pii(file_rel, lineno, decoded, show_secrets, "url_decoded")
-                )
-
-        # ── JWT payload ────────────────────────────────────────────────────────
-        for m in _JWT_PAYLOAD_RE.finditer(line):
-            payload_b64 = m.group(1).replace("-", "+").replace("_", "/")
-            payload_b64 += "=" * (-len(payload_b64) % 4)
-            try:
-                decoded = base64.b64decode(payload_b64).decode("utf-8", errors="replace")
-                findings.extend(
-                    _scan_chunk_for_pii(file_rel, lineno, decoded, show_secrets, "jwt_payload")
-                )
-            except (ValueError,):
-                pass
-
-        # ── Generic Base64 blobs ───────────────────────────────────────────────
-        for m in _BASE64_BLOB_RE.finditer(line):
-            blob = m.group(0)
-            padded = blob + "=" * (-len(blob) % 4)
-            try:
-                decoded_bytes = base64.b64decode(padded.encode(), validate=True)
-                decoded = decoded_bytes.decode("utf-8")  # strict — rejects binary blobs
-                if len(decoded) >= 8 and any(c.isprintable() and not c.isspace() for c in decoded[:20]):
-                    findings.extend(
-                        _scan_chunk_for_pii(file_rel, lineno, decoded, show_secrets, "base64_decoded")
-                    )
-            except (ValueError,):
-                pass  # not valid UTF-8 base64 — skip silently
-
+        findings.extend(_scan_url_encoded(file_rel, lineno, line, show_secrets))
+        findings.extend(_scan_jwt_payloads(file_rel, lineno, line, show_secrets))
+        findings.extend(_scan_base64_blobs(file_rel, lineno, line, show_secrets))
     return findings
+
+
+def _content_findings_for_pattern(
+    file_rel: str, scan_content: str, show_secrets: bool, pat,
+) -> list[Finding]:
+    """Run a single PII pattern against file content, computing line numbers."""
+    rule_id, category, severity, pattern, validator = pat
+    rule = _ENGINE.lookup(category)
+    out: list[Finding] = []
+    for match in pattern.finditer(scan_content):
+        matched_text = match.group(0)
+        if validator and not validator(matched_text):
+            continue
+        # Calculate 1-based line number from character offset
+        line = scan_content[: match.start()].count("\n") + 1
+        display = matched_text if show_secrets else Finding.redact(matched_text)
+        out.append(Finding(
+            id=Finding.make_id(file_rel, line, rule_id),
+            scanners=["pii"],
+            category=category,
+            severity=severity,
+            confidence=_RULE_CONFIDENCE.get(rule_id, 0.70),
+            file=file_rel,
+            line=line,
+            match=display,
+            rule_id=rule_id,
+            message=f"{category.replace('_', ' ').title()} pattern detected.",
+            remediation_description=rule.description if rule else "",
+            fix_steps=rule.fix_steps if rule else [],
+            references=rule.references if rule else [],
+            regulations=_REG_ENGINE.lookup(category),
+        ))
+    return out
 
 
 # ─── Scanner class ────────────────────────────────────────────────────────────
@@ -1370,6 +1447,41 @@ class PIIScanner(AbstractScanner):
             )
         return findings
 
+    def _extract_member_content(
+        self, member_name: str, member_suffix: str, member_data: bytes
+    ) -> Optional[str]:
+        """Return decoded/extracted text for an archive member, or None to skip it."""
+        if member_suffix in _BINARY_DOC_EXTENSIONS:
+            return _extract_binary_doc_from_bytes(member_suffix, member_data)
+        # Text file — skip unrecognised extensions
+        if not _should_scan_name(member_name):
+            return None
+        try:
+            return member_data.decode("utf-8", errors="replace")
+        except ValueError:
+            return None
+
+    def _scan_member_content(
+        self, member_rel: str, member_suffix: str, content: str, config: ScanConfig
+    ) -> list[Finding]:
+        """Scan a single extracted archive member's text content."""
+        findings: list[Finding] = []
+        findings.extend(self._scan_content(member_rel, content, config.show_secrets, config.skip_comments))
+        findings.extend(_extract_ner_findings(member_rel, content, config.show_secrets, config.skip_comments))
+        findings.extend(_scan_decoded_payloads(member_rel, content, config.show_secrets))
+        if member_suffix in _CSV_EXTENSIONS:
+            findings.extend(_scan_csv_columns(member_rel, content, config.show_secrets))
+        member_lines = content.splitlines()
+        self._lines_scanned += len(member_lines)
+        if config.skip_comments:
+            stripped_lines = _strip_comments_from_content(content).splitlines()
+            self._lines_skipped += sum(
+                1 for o, s in zip(member_lines, stripped_lines)
+                if o.strip() and not s.strip()
+            )
+        self._files_scanned += 1
+        return findings
+
     def _scan_archive_data(
         self,
         archive_rel: str,
@@ -1397,35 +1509,14 @@ class PIIScanner(AbstractScanner):
                 )
                 continue
 
-            # Binary doc — extract then scan
             member_suffix = Path(member_name).suffix.lower()
-            if member_suffix in _BINARY_DOC_EXTENSIONS:
-                content = _extract_binary_doc_from_bytes(member_suffix, member_data)
-                if content is None:
-                    continue
-            else:
-                # Text file — skip unrecognised extensions
-                if not _should_scan_name(member_name):
-                    continue
-                try:
-                    content = member_data.decode("utf-8", errors="replace")
-                except (ValueError,):
-                    continue
+            content = self._extract_member_content(member_name, member_suffix, member_data)
+            if content is None:
+                continue
 
-            findings.extend(self._scan_content(member_rel, content, config.show_secrets, config.skip_comments))
-            findings.extend(_extract_ner_findings(member_rel, content, config.show_secrets, config.skip_comments))
-            findings.extend(_scan_decoded_payloads(member_rel, content, config.show_secrets))
-            if member_suffix in _CSV_EXTENSIONS:
-                findings.extend(_scan_csv_columns(member_rel, content, config.show_secrets))
-            member_lines = content.splitlines()
-            self._lines_scanned += len(member_lines)
-            if config.skip_comments:
-                stripped_lines = _strip_comments_from_content(content).splitlines()
-                self._lines_skipped += sum(
-                    1 for o, s in zip(member_lines, stripped_lines)
-                    if o.strip() and not s.strip()
-                )
-            self._files_scanned += 1
+            findings.extend(
+                self._scan_member_content(member_rel, member_suffix, content, config)
+            )
 
         return findings
 
@@ -1433,32 +1524,9 @@ class PIIScanner(AbstractScanner):
         findings: list[Finding] = []
         scan_content = _strip_comments_from_content(content) if skip_comments else content
 
-        for rule_id, category, severity, pattern, validator in _PATTERNS:
-            for match in pattern.finditer(scan_content):
-                matched_text = match.group(0)
-
-                if validator and not validator(matched_text):
-                    continue
-
-                # Calculate 1-based line number from character offset
-                line = scan_content[: match.start()].count("\n") + 1
-                rule = _ENGINE.lookup(category)
-
-                findings.append(Finding(
-                    id=Finding.make_id(file_rel, line, rule_id),
-                    scanners=["pii"],
-                    category=category,
-                    severity=severity,
-                    confidence=_RULE_CONFIDENCE.get(rule_id, 0.70),
-                    file=file_rel,
-                    line=line,
-                    match=matched_text if show_secrets else Finding.redact(matched_text),
-                    rule_id=rule_id,
-                    message=f"{category.replace('_', ' ').title()} pattern detected.",
-                    remediation_description=rule.description if rule else "",
-                    fix_steps=rule.fix_steps if rule else [],
-                    references=rule.references if rule else [],
-                    regulations=_REG_ENGINE.lookup(category),
-                ))
+        for pat in _PATTERNS:
+            findings.extend(
+                _content_findings_for_pattern(file_rel, scan_content, show_secrets, pat)
+            )
 
         return findings

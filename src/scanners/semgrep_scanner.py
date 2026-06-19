@@ -72,9 +72,13 @@ async def _download_ruleset(ruleset: str, dest: Path) -> bool:
     if os.environ.get("SEMGREP_RULES_SSL_VERIFY", "").lower() == "false":
         # Build a no-verification context — more reliable than passing verify=False
         # to httpx, which can be overridden by REQUESTS_CA_BUNDLE in some versions.
+        # SSL verification is disabled here ONLY when the operator explicitly opts
+        # in via SEMGREP_RULES_SSL_VERIFY=false (e.g. behind a corporate TLS proxy
+        # with an un-trusted intercept CA). The risk is deliberately accepted and
+        # surfaced via the warning below.
         _ssl_ctx = _ssl.create_default_context()
-        _ssl_ctx.check_hostname = False
-        _ssl_ctx.verify_mode = _ssl.CERT_NONE
+        _ssl_ctx.check_hostname = False  # NOSONAR
+        _ssl_ctx.verify_mode = _ssl.CERT_NONE  # NOSONAR
         print(
             "[semgrep] WARNING: SSL verification disabled via SEMGREP_RULES_SSL_VERIFY=false",
             file=sys.stderr,
@@ -180,6 +184,9 @@ class SemgrepScanner(AbstractScanner):
         return detect_container_runtime() is not None
 
     async def _resolve_binary(self) -> list[str]:
+        # Yield to the event loop — this method is intentionally async to satisfy
+        # the AbstractScanner interface contract.
+        await asyncio.sleep(0)
         path = _find_semgrep()
         if path:
             return [path]

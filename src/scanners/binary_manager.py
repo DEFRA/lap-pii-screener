@@ -7,12 +7,13 @@ import platform
 import stat
 import sys
 import tarfile
-import tempfile
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
+import aiofiles
+import aiofiles.tempfile
 import httpx
 
 # All binaries are stored under ~/.sensitive-scanner/bin/
@@ -185,16 +186,16 @@ def _resolve_download_url(
 
 async def _download_to_temp(download_url: str, asset_name: str, name: str, version: str) -> Optional[Path]:
     """Stream *download_url* to a temp file and return its path, or None on error."""
-    with tempfile.NamedTemporaryFile(delete=False, suffix=Path(asset_name).suffix) as tmp:
-        tmp_path = Path(tmp.name)
+    async with aiofiles.tempfile.NamedTemporaryFile(delete=False, suffix=Path(asset_name).suffix) as tmp:
+        tmp_path = Path(str(tmp.name))
     try:
         async with httpx.AsyncClient(timeout=120, follow_redirects=True) as client:
             print(f"[binary_manager] Downloading {name} {version}...", file=sys.stderr)
             async with client.stream("GET", download_url) as resp:
                 resp.raise_for_status()
-                with open(tmp_path, "wb") as fh:
+                async with aiofiles.open(tmp_path, "wb") as fh:
                     async for chunk in resp.aiter_bytes(chunk_size=65536):
-                        fh.write(chunk)
+                        await fh.write(chunk)
     except (httpx.HTTPError, OSError) as exc:
         print(f"[binary_manager] Download failed for {name}: {exc}", file=sys.stderr)
         tmp_path.unlink(missing_ok=True)

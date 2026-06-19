@@ -48,6 +48,80 @@ def _backup_file(src: Path, backup_dir: Path, target_root: Path) -> Path:
     return dest
 
 
+def _build_skip_results(
+    items: list["ReviewItem"], rel_path: str, reason: str
+) -> list[ItemResult]:
+    """Build a list of non-applied ItemResults sharing the same failure reason."""
+    return [
+        ItemResult(
+            finding_id=item.finding_id,
+            file=rel_path,
+            line=item.line,
+            replacement=item.replacement,
+            applied=False,
+            reason=reason,
+        )
+        for item in items
+    ]
+
+
+def _apply_single_item(
+    item: "ReviewItem",
+    lines: list[str],
+    rel_path: str,
+    dry_run: bool,
+    console: Optional["Console"],
+) -> tuple[ItemResult, bool]:
+    """Apply one approved item to *lines* (in place). Returns (result, file_changed)."""
+    idx = item.line - 1
+    if idx < 0 or idx >= len(lines):
+        return ItemResult(
+            finding_id=item.finding_id,
+            file=rel_path,
+            line=item.line,
+            replacement=item.replacement,
+            applied=False,
+            reason=f"Line {item.line} out of range (file has {len(lines)} lines)",
+        ), False
+
+    if item.raw_match and item.raw_match in lines[idx]:
+        file_changed = False
+        if not dry_run:
+            lines[idx] = lines[idx].replace(item.raw_match, item.replacement, 1)
+            file_changed = True
+        if console:
+            prefix = "[dry-run] " if dry_run else ""
+            style = "dim" if dry_run else "green"
+            console.print(
+                f"  [{style}]{prefix}{rel_path}:{item.line} "
+                f"→ {item.replacement}[/{style}]"
+            )
+        return ItemResult(
+            finding_id=item.finding_id,
+            file=rel_path,
+            line=item.line,
+            replacement=item.replacement,
+            applied=True,
+            reason="",
+        ), file_changed
+
+    reason = (
+        f"'{item.raw_match}' not found on line {item.line}"
+        if item.raw_match
+        else "raw_match is empty"
+    )
+    if console:
+        console.print(f"  [yellow]skip[/yellow] {rel_path}:{item.line} — {reason}")
+    return ItemResult(
+        finding_id=item.finding_id,
+        file=rel_path,
+        line=item.line,
+        replacement=item.replacement,
+        applied=False,
+        reason=reason,
+    ), False
+
+
 def _process_file_items(
     rel_path: str,
     items: list["ReviewItem"],
@@ -60,17 +134,7 @@ def _process_file_items(
     file_path = target_root / rel_path
 
     if not file_path.exists():
-        return [
-            ItemResult(
-                finding_id=item.finding_id,
-                file=rel_path,
-                line=item.line,
-                replacement=item.replacement,
-                applied=False,
-                reason="File not found",
-            )
-            for item in items
-        ], None
+        return _build_skip_results(items, rel_path, "File not found"), None
 
     backed_up_path: Optional[str] = None
     if not dry_run:
@@ -80,65 +144,16 @@ def _process_file_items(
     try:
         lines = file_path.read_text(encoding="utf-8", errors="replace").splitlines(keepends=True)
     except OSError as exc:
-        return [
-            ItemResult(
-                finding_id=item.finding_id,
-                file=rel_path,
-                line=item.line,
-                replacement=item.replacement,
-                applied=False,
-                reason=str(exc),
-            )
-            for item in items
-        ], None
+        return _build_skip_results(items, rel_path, str(exc)), None
 
     items_sorted = sorted(items, key=lambda i: i.line, reverse=True)
     item_results: list[ItemResult] = []
     file_changed = False
 
     for item in items_sorted:
-        idx = item.line - 1
-        if idx < 0 or idx >= len(lines):
-            item_results.append(ItemResult(
-                finding_id=item.finding_id,
-                file=rel_path,
-                line=item.line,
-                replacement=item.replacement,
-                applied=False,
-                reason=f"Line {item.line} out of range (file has {len(lines)} lines)",
-            ))
-            continue
-
-        if item.raw_match and item.raw_match in lines[idx]:
-            if not dry_run:
-                lines[idx] = lines[idx].replace(item.raw_match, item.replacement, 1)
-                file_changed = True
-            applied = True
-            prefix = "[dry-run] " if dry_run else ""
-            if console:
-                style = "dim" if dry_run else "green"
-                console.print(
-                    f"  [{style}]{prefix}{rel_path}:{item.line} "
-                    f"→ {item.replacement}[/{style}]"
-                )
-        else:
-            applied = False
-            reason = (
-                f"'{item.raw_match}' not found on line {item.line}"
-                if item.raw_match
-                else "raw_match is empty"
-            )
-            if console:
-                console.print(f"  [yellow]skip[/yellow] {rel_path}:{item.line} — {reason}")
-
-        item_results.append(ItemResult(
-            finding_id=item.finding_id,
-            file=rel_path,
-            line=item.line,
-            replacement=item.replacement,
-            applied=applied,
-            reason="" if applied else reason,
-        ))
+        res, changed = _apply_single_item(item, lines, rel_path, dry_run, console)
+        item_results.append(res)
+        file_changed = file_changed or changed
 
     if file_changed:
         file_path.write_text("".join(lines), encoding="utf-8")

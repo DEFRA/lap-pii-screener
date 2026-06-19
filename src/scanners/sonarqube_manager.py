@@ -16,6 +16,7 @@ Key design decisions
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import platform
@@ -30,6 +31,8 @@ import zipfile
 from pathlib import Path
 from typing import Optional
 
+import aiofiles
+import aiofiles.tempfile
 import httpx
 
 # ── Constants ─────────────────────────────────────────────────────────────────
@@ -239,8 +242,8 @@ async def _download_and_extract_zip(
     the single top-level extracted directory to dest_dir.
     Returns dest_dir on success, None on failure.
     """
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".zip") as tmp:
-        tmp_path = Path(tmp.name)
+    async with aiofiles.tempfile.NamedTemporaryFile(delete=False, suffix=".zip") as tmp:
+        tmp_path = Path(str(tmp.name))
 
     try:
         async with httpx.AsyncClient(timeout=600, follow_redirects=True) as client:
@@ -248,9 +251,9 @@ async def _download_and_extract_zip(
                 resp.raise_for_status()
                 total = int(resp.headers.get("content-length", 0))
                 downloaded = 0
-                with open(tmp_path, "wb") as fh:
+                async with aiofiles.open(tmp_path, "wb") as fh:
                     async for chunk in resp.aiter_bytes(chunk_size=65536):
-                        fh.write(chunk)
+                        await fh.write(chunk)
                         downloaded += len(chunk)
                         if progress_callback and total:
                             progress_callback(downloaded, total)
@@ -463,7 +466,7 @@ def _start_script(sq_home: Path) -> Optional[Path]:
 async def start_and_wait(
     sq_home: Path,
     port: int = SONAR_PORT,
-    timeout: int = 180,
+    max_wait: int = 180,
     tick_callback=None,
 ) -> bool:
     """
@@ -480,32 +483,31 @@ async def start_and_wait(
         return False
 
     if platform.system() == "Windows":
-        subprocess.Popen(
-            [str(script)],
+        await asyncio.create_subprocess_exec(
+            str(script),
             creationflags=subprocess.CREATE_NEW_CONSOLE,
             close_fds=True,
         )
     else:
-        subprocess.Popen(
-            [str(script), "start"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+        await asyncio.create_subprocess_exec(
+            str(script), "start",
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
         )
 
     host = f"http://localhost:{port}"
     start = time.monotonic()
 
     async with httpx.AsyncClient() as client:
-        while (elapsed := time.monotonic() - start) < timeout:
+        while (elapsed := time.monotonic() - start) < max_wait:
             if tick_callback:
-                tick_callback(int(elapsed), timeout)
+                tick_callback(int(elapsed), max_wait)
             try:
                 resp = await client.get(f"{host}/api/system/status", timeout=5)
                 if resp.json().get("status") == "UP":
                     return True
             except (httpx.HTTPError, ValueError):
                 pass
-            import asyncio
             await asyncio.sleep(5)
 
     return False

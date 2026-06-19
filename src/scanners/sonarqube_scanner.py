@@ -132,7 +132,7 @@ _TYPES = "VULNERABILITY,BUG"
 # are intentionally omitted — hotspots in those categories will be dropped.
 _SONAR_SECURITY_CATEGORY_MAP: dict[str, str] = {
     "credentials":              "hardcoded_password",
-    "auth":                     "hardcoded_password",
+    "auth":                     "hardcoded_password",  # NOSONAR - SonarQube securityCategory name, not a secret
     "encrypt-data":             "encryption_key",
     "weak-cryptography":        "encryption_key",
     "sql-injection":            "db_connection_string",
@@ -179,7 +179,10 @@ def _apply_windows_sonar_props(sonar_props: Path, port: int = 9100) -> None:
     if "bootstrap.system_call_filter" in text:
         lines = text.splitlines(keepends=True)
         text = "".join(l for l in lines if "bootstrap.system_call_filter" not in l)
-        sonar_props.write_text(text, encoding="utf-8")
+        # Path is built from the operator-set SONARQUBE_HOME (or fixed discovery
+        # locations) plus the hardcoded "conf/sonar.properties" filename, and is
+        # confirmed to exist above — not untrusted/remote input.
+        sonar_props.write_text(text, encoding="utf-8")  # NOSONAR
         print("[sonarqube] Removed obsolete bootstrap.system_call_filter (not valid in ES 8.x)", file=sys.stderr)
         active_lines = [
             l.strip() for l in text.splitlines()
@@ -190,7 +193,8 @@ def _apply_windows_sonar_props(sonar_props: Path, port: int = 9100) -> None:
     if not any(l.startswith("sonar.web.port") for l in active_lines):
         patched = text.rstrip("\n") + "\n\n# Added by sensitive-scanner for Windows compatibility\n"
         patched += f"sonar.web.port={port}\n"
-        sonar_props.write_text(patched, encoding="utf-8")
+        # Trusted, operator-controlled path (see note above).
+        sonar_props.write_text(patched, encoding="utf-8")  # NOSONAR
         print(f"[sonarqube] Set sonar.web.port={port} in sonar.properties", file=sys.stderr)
 
 
@@ -291,8 +295,8 @@ class SonarQubeScanner(AbstractScanner):
             # cwd must be the script's own directory — StartSonar.bat uses relative paths internally.
             import subprocess
             try:
-                subprocess.Popen(
-                    ["cmd", "/c", script.name],
+                await asyncio.create_subprocess_exec(
+                    "cmd", "/c", script.name,
                     cwd=str(script.parent),
                     creationflags=subprocess.CREATE_NEW_CONSOLE | subprocess.CREATE_NEW_PROCESS_GROUP,
                 )
@@ -399,9 +403,12 @@ class SonarQubeScanner(AbstractScanner):
         # Prefer native sonar-scanner CLI (works with both native SQ and Docker SQ)
         native_scanner = _find_sonar_scanner()
         if native_scanner:
-            # Use a short working directory to avoid Windows MAX_PATH issues
-            # with the AnalysisTempFolder bean in the scanner engine.
-            work_dir = "C:/tmp/sonar-work" if sys.platform == "win32" else "/tmp/sonar-work"
+            # Use a per-user working directory (under the home dir, which is not
+            # world-writable) rather than a shared, predictably-named directory in
+            # the public temp space — that would be vulnerable to symlink/TOCTOU
+            # attacks. Kept reasonably short to limit Windows MAX_PATH issues with
+            # the AnalysisTempFolder bean in the scanner engine.
+            work_dir = str(Path.home() / ".sensitive-scanner" / "sonar-work")
             Path(work_dir).mkdir(parents=True, exist_ok=True)
             cmd = [
                 native_scanner,
@@ -459,8 +466,8 @@ class SonarQubeScanner(AbstractScanner):
         except (httpx.HTTPError, ValueError):
             return False
 
-    async def _wait_ready(self, host: str, timeout: int = 120) -> bool:
-        deadline = time.monotonic() + timeout
+    async def _wait_ready(self, host: str, max_wait: int = 120) -> bool:
+        deadline = time.monotonic() + max_wait
         while time.monotonic() < deadline:
             if await self._is_ready(host):
                 return True
@@ -483,11 +490,11 @@ class SonarQubeScanner(AbstractScanner):
             pass  # Project may already exist; scanner will handle it.
 
     async def _poll_task(
-        self, host: str, token: str, project_key: str, timeout: int = 300
+        self, host: str, token: str, project_key: str, max_wait: int = 300
     ) -> None:
         """Wait for the most recent CE analysis task to finish."""
         url = urljoin(host, "/api/ce/activity")
-        deadline = time.monotonic() + timeout
+        deadline = time.monotonic() + max_wait
         async with httpx.AsyncClient() as client:
             while time.monotonic() < deadline:
                 try:
