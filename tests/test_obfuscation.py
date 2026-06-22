@@ -2,13 +2,17 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
+import obfuscation.faker_strategies as _fs
 from models.finding import Finding
 from obfuscation.engine import ApplyResult, ItemResult, _backup_file, apply_session, rollback
-from obfuscation.session import ReviewItem, ReviewSession
+from obfuscation.session import (
+    ReviewItem, ReviewSession,
+    _check_obfuscatable, _make_match_display, _get_replacement,
+)
 from obfuscation.strategies import _REPLACEMENTS, get_replacement
 
 
@@ -489,3 +493,118 @@ class TestRollback:
         count = rollback(backup_dir, target_root)
 
         assert count == 3
+
+
+# =========================================================================== #
+# session helper functions                                                     #
+# =========================================================================== #
+
+
+class TestCheckObfuscatable:
+    def test_binary_extension_returns_false(self) -> None:
+        ok, reason = _check_obfuscatable("archive.zip", "secret")
+        assert ok is False
+        assert "Binary/archive" in reason
+
+    def test_docx_returns_false(self) -> None:
+        ok, reason = _check_obfuscatable("report.docx", "text")
+        assert ok is False
+
+    def test_redacted_match_returns_false(self) -> None:
+        ok, reason = _check_obfuscatable("app.py", "abcd****")
+        assert ok is False
+        assert "Raw match not captured" in reason
+
+    def test_empty_match_returns_false(self) -> None:
+        ok, reason = _check_obfuscatable("app.py", "")
+        assert ok is False
+
+    def test_none_match_returns_false(self) -> None:
+        ok, reason = _check_obfuscatable("app.py", None)
+        assert ok is False
+
+    def test_valid_match_returns_true(self) -> None:
+        ok, reason = _check_obfuscatable("app.py", "mysecret")
+        assert ok is True
+        assert reason == ""
+
+
+class TestMakeMatchDisplay:
+    def test_raw_match_is_redacted(self) -> None:
+        result = _make_match_display("john.doe@example.com")
+        assert "****" in result
+        assert "john.doe@example.com" not in result
+
+    def test_already_redacted_returned_as_is(self) -> None:
+        result = _make_match_display("abcd****")
+        assert result == "abcd****"
+
+    def test_none_returns_empty_string(self) -> None:
+        result = _make_match_display(None)
+        assert result == ""
+
+
+class TestGetReplacementHelper:
+    def test_redaction_strategy_returns_redacted_token(self) -> None:
+        result = _get_replacement("redaction", "pii_email")
+        assert result == "[REDACTED_EMAIL]"
+
+    def test_faker_strategy_calls_faker(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        mock = MagicMock()
+        mock.email.return_value = "fake@example.com"
+        monkeypatch.setattr(_fs, "FAKER_AVAILABLE", True)
+        monkeypatch.setattr(_fs, "_faker", mock)
+        result = _get_replacement("faker", "pii_email")
+        assert result == "fake@example.com"
+
+    def test_unknown_strategy_falls_back_to_redaction(self) -> None:
+        result = _get_replacement("unknown_strategy", "pii_email")
+        assert result == "[REDACTED_EMAIL]"
+
+
+class TestReviewSessionFakerStrategy:
+    def test_faker_strategy_uses_faker_replacement(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        mock = MagicMock()
+        mock.email.return_value = "generated@fake.com"
+        monkeypatch.setattr(_fs, "FAKER_AVAILABLE", True)
+        monkeypatch.setattr(_fs, "_faker", mock)
+        f = _finding(category="pii_email", match="real@example.com")
+        session = ReviewSession.from_findings(
+            [f], scan_id="x", target_path="/p", obfuscation_strategy="faker"
+        )
+        assert session.items[0].replacement == "generated@fake.com"
+
+    def test_faker_strategy_stored_on_item(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        mock = MagicMock()
+        mock.email.return_value = "x@x.com"
+        monkeypatch.setattr(_fs, "FAKER_AVAILABLE", True)
+        monkeypatch.setattr(_fs, "_faker", mock)
+        f = _finding(category="pii_email", match="real@example.com")
+        session = ReviewSession.from_findings(
+            [f], scan_id="x", target_path="/p", obfuscation_strategy="faker"
+        )
+        assert session.items[0].obfuscation_strategy == "faker"
+
+    def test_default_strategy_is_redaction(self) -> None:
+        f = _finding(match="real@example.com")
+        session = ReviewSession.from_findings([f], scan_id="x", target_path="/p")
+        assert session.items[0].obfuscation_strategy == "redaction"
+
+    def test_review_item_obfuscation_strategy_field_default(self) -> None:
+        item = ReviewItem(
+            finding_id="id1",
+            file="app.py",
+            line=1,
+            rule_id="pii_email",
+            category="pii_email",
+            severity="high",
+            scanners=["presidio"],
+            match_display="john****",
+            replacement="[REDACTED_EMAIL]",
+        )
+        assert item.obfuscation_strategy == "redaction"
+

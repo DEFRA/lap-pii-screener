@@ -3,8 +3,9 @@ from __future__ import annotations
 
 import io
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
+import pytest
 from rich.console import Console
 
 from obfuscation import reviewer
@@ -247,3 +248,51 @@ class TestRunReview:
             session, tmp_path, auto_approve_severity="high", console=_quiet_console()
         )
         assert out.items[0].decision == "approved"
+
+
+# --------------------------------------------------------------------------- #
+# faker-specific reviewer helpers                                              #
+# --------------------------------------------------------------------------- #
+
+
+class TestBuildInfoGridFakerStrategy:
+    def test_faker_strategy_label_is_cyan(self) -> None:
+        item = _item()
+        item.obfuscation_strategy = "faker"
+        grid = _build_info_grid(item, show_secrets=False)
+        assert grid is not None
+
+    def test_redaction_strategy_label_plain(self) -> None:
+        item = _item()
+        item.obfuscation_strategy = "redaction"
+        grid = _build_info_grid(item, show_secrets=False)
+        assert grid is not None
+
+
+class TestDecideToggleFaker:
+    def test_toggle_from_redaction_to_faker(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import obfuscation.faker_strategies as fs
+        mock_f = MagicMock()
+        mock_f.email.return_value = "fake@example.com"
+        monkeypatch.setattr(fs, "FAKER_AVAILABLE", True)
+        monkeypatch.setattr(fs, "_faker", mock_f)
+
+        from obfuscation.reviewer import _decide_toggle_faker
+        item = _item(category="pii_email")
+        item.obfuscation_strategy = "redaction"
+        _decide_toggle_faker(item, _quiet_console())
+
+        assert item.obfuscation_strategy == "faker"
+        assert item.replacement == "fake@example.com"
+
+    def test_toggle_from_faker_to_redaction(self) -> None:
+        from obfuscation.reviewer import _decide_toggle_faker
+        item = _item(category="pii_email")
+        item.obfuscation_strategy = "faker"
+        _decide_toggle_faker(item, _quiet_console())
+
+        assert item.obfuscation_strategy == "redaction"
+        assert item.replacement == "[REDACTED_EMAIL]"
+

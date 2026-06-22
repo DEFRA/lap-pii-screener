@@ -1179,6 +1179,15 @@ def obfuscate(
             "whether a finding is a genuine secret."
         ),
     ),
+    obfuscation_strategy: str = typer.Option(
+        "redaction",
+        "--obfuscation-strategy",
+        help=(
+            "Strategy for obfuscation. Options: 'redaction' (default, uses [REDACTED] tokens), "
+            "'faker' (replaces with realistic fake data), or 'all' (ask for each finding). "
+            "Use 'faker' to replace PII with convincing fake data that maintains data types."
+        ),
+    ),
 ) -> None:
     """Scan a directory for PII/secrets, review findings interactively, and obfuscate them.
 
@@ -1193,6 +1202,11 @@ def obfuscate(
 
     Re-run with --apply-session <session.json> to skip the scan and TUI and
     re-apply a previously saved session.
+
+    Obfuscation Strategies:
+      - 'redaction' (default): Replace with [REDACTED] placeholder tokens
+      - 'faker': Replace with realistic fake data (e.g., names, emails, phone numbers)
+      - 'all': Ask for each finding during interactive review
     """
     from datetime import datetime as _dt
 
@@ -1255,11 +1269,32 @@ def obfuscate(
         _console.print("[bold green]No findings — nothing to obfuscate.[/bold green]")
         return
 
+    # Validate obfuscation_strategy
+    valid_strategies = {"redaction", "faker", "all"}
+    if obfuscation_strategy not in valid_strategies:
+        _console.print(f"[bold red]Invalid obfuscation strategy:[/bold red] {obfuscation_strategy}")
+        _console.print(f"Valid options: {', '.join(sorted(valid_strategies))}")
+        raise typer.Exit(code=1)
+
+    # Check faker availability if faker-based strategy is requested
+    if obfuscation_strategy in {"faker", "all"}:
+        from obfuscation.faker_strategies import FAKER_AVAILABLE
+        if not FAKER_AVAILABLE:
+            _console.print(
+                "[bold red]The 'faker' package is required for the "
+                f"'{obfuscation_strategy}' obfuscation strategy.[/bold red]"
+            )
+            _console.print("Install it with: [bold]pip install faker[/bold]")
+            raise typer.Exit(code=1)
+
     # ── Build session (while match still holds raw text from show_secrets=True) ─
+    # For "all" strategy, default to "redaction" initially; user picks per-item in TUI
+    initial_strategy = "redaction" if obfuscation_strategy == "all" else obfuscation_strategy
     session = ReviewSession.from_findings(
         _report.findings,
         scan_id=_report.scan_id,
         target_path=str(target),
+        obfuscation_strategy=initial_strategy,
     )
 
     # Re-redact match for display AFTER session has captured the raw values

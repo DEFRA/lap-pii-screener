@@ -1117,3 +1117,66 @@ class TestObfuscateCommand:
         result = runner.invoke(cli.app, ["obfuscate", str(tmp_path)])
         assert result.exit_code == 0
         assert "no files modified" in result.stdout
+
+    def test_obfuscate_invalid_strategy_exits(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        report = make_report(findings=[make_finding(file="app.py")])
+        from scanners import orchestrator
+        monkeypatch.setattr(orchestrator, "run_scan", AsyncMock(return_value=report))
+        result = runner.invoke(
+            cli.app,
+            ["obfuscate", str(tmp_path), "--obfuscation-strategy", "invalid_strategy"],
+        )
+        assert result.exit_code == 1
+        assert "Invalid obfuscation strategy" in result.stdout
+
+    def test_obfuscate_faker_strategy_exits_when_faker_unavailable(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import obfuscation.faker_strategies as fs
+        report = make_report(findings=[make_finding(file="app.py")])
+        from scanners import orchestrator
+        monkeypatch.setattr(orchestrator, "run_scan", AsyncMock(return_value=report))
+        monkeypatch.setattr(fs, "FAKER_AVAILABLE", False)
+        result = runner.invoke(
+            cli.app,
+            ["obfuscate", str(tmp_path), "--obfuscation-strategy", "faker"],
+        )
+        assert result.exit_code == 1
+        assert "faker" in result.stdout.lower()
+
+    def test_obfuscate_all_strategy_exits_when_faker_unavailable(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import obfuscation.faker_strategies as fs
+        report = make_report(findings=[make_finding(file="app.py")])
+        from scanners import orchestrator
+        monkeypatch.setattr(orchestrator, "run_scan", AsyncMock(return_value=report))
+        monkeypatch.setattr(fs, "FAKER_AVAILABLE", False)
+        result = runner.invoke(
+            cli.app,
+            ["obfuscate", str(tmp_path), "--obfuscation-strategy", "all"],
+        )
+        assert result.exit_code == 1
+
+    def test_obfuscate_faker_strategy_proceeds_when_faker_available(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import obfuscation.faker_strategies as fs
+        mock_faker_inst = MagicMock()
+        mock_faker_inst.password.return_value = "fake-secret"
+        report = make_report(findings=[make_finding(file="app.py")])
+        from scanners import orchestrator
+        from obfuscation import reviewer
+        monkeypatch.setattr(orchestrator, "run_scan", AsyncMock(return_value=report))
+        monkeypatch.setattr(fs, "FAKER_AVAILABLE", True)
+        monkeypatch.setattr(fs, "_faker", mock_faker_inst)
+        sess = _session(items=[_item(decision="skipped")])
+        monkeypatch.setattr(reviewer, "run_review", lambda *a, **k: sess)
+        result = runner.invoke(
+            cli.app,
+            ["obfuscate", str(tmp_path), "--obfuscation-strategy", "faker"],
+        )
+        assert result.exit_code == 0
+
