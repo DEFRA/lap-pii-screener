@@ -63,6 +63,31 @@ class ReviewItem(BaseModel):
     obfuscation_strategy: str = "redaction"
 
 
+def _check_obfuscatable(file: str, raw: str | None) -> tuple[bool, str]:
+    """Return (obfuscatable, reason) for a given file extension and raw match."""
+    ext = Path(file).suffix.lower()
+    if ext in _NON_OBFUSCATABLE_EXTENSIONS:
+        return False, f"Binary/archive file ({ext}) — replace manually"
+    if not raw or raw.endswith("****"):
+        return False, "Raw match not captured — re-run with show_secrets=True"
+    return True, ""
+
+
+def _make_match_display(raw: str | None) -> str:
+    """Return a redacted display string for the raw match value."""
+    if raw and not raw.endswith("****"):
+        return Finding.redact(raw)
+    return raw or ""
+
+
+def _get_replacement(strategy: str, category: str) -> str:
+    """Generate a replacement token using the requested obfuscation strategy."""
+    if strategy == "faker":
+        from obfuscation.faker_strategies import get_faker_replacement
+        return get_faker_replacement(category)
+    return get_replacement(category)
+
+
 class ReviewSession(BaseModel):
     """Full obfuscation review session for one scan run."""
 
@@ -149,35 +174,10 @@ class ReviewSession(BaseModel):
         """
         items: list[ReviewItem] = []
         for f in findings:
-            ext = Path(f.file).suffix.lower()
             raw = f.match  # populated as raw text when show_secrets=True
-
-            # Determine obfuscatability
-            if ext in _NON_OBFUSCATABLE_EXTENSIONS:
-                obfuscatable = False
-                reason = f"Binary/archive file ({ext}) — replace manually"
-            elif not raw or raw.endswith("****"):
-                # match is still in redacted form — raw text not available
-                obfuscatable = False
-                reason = "Raw match not captured — re-run with show_secrets=True"
-            else:
-                obfuscatable = True
-                reason = ""
-
-            match_display = (
-                Finding.redact(raw)
-                if (raw and not raw.endswith("****"))
-                else (raw or "")
-            )
-
-            # Generate replacement based on strategy
-            if obfuscation_strategy == "faker":
-                from obfuscation.faker_strategies import get_faker_replacement
-                replacement = get_faker_replacement(f.category)
-            else:
-                from obfuscation.strategies import get_replacement
-                replacement = get_replacement(f.category)
-
+            obfuscatable, reason = _check_obfuscatable(f.file, raw)
+            match_display = _make_match_display(raw)
+            replacement = _get_replacement(obfuscation_strategy, f.category)
             items.append(ReviewItem(
                 finding_id=f.id,
                 file=f.file,
