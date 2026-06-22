@@ -7,7 +7,7 @@ Faker is an optional runtime dependency. Install it with::
 """
 from __future__ import annotations
 
-try:
+try:  # pragma: no cover
     from faker import Faker as _Faker
     _faker = _Faker()
     FAKER_AVAILABLE = True
