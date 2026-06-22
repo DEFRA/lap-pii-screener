@@ -59,6 +59,8 @@ class ReviewItem(BaseModel):
     skip_reason: str = ""
     # Confidence score copied from the originating Finding (0.0–1.0)
     confidence: float = 0.70
+    # Obfuscation strategy: "redaction" (default) or "faker"
+    obfuscation_strategy: str = "redaction"
 
 
 class ReviewSession(BaseModel):
@@ -132,11 +134,18 @@ class ReviewSession(BaseModel):
         findings: list[Finding],
         scan_id: str,
         target_path: str,
+        obfuscation_strategy: str = "redaction",
     ) -> "ReviewSession":
         """Create a new ReviewSession from a list of scan findings.
 
         Findings whose file extension is binary/archive, or whose raw match
         text was not captured, are automatically marked ``'manual'``.
+
+        Args:
+            findings: List of findings to review.
+            scan_id: Scan ID for this session.
+            target_path: Path to the scanned target.
+            obfuscation_strategy: Strategy to use ("redaction" or "faker").
         """
         items: list[ReviewItem] = []
         for f in findings:
@@ -161,6 +170,14 @@ class ReviewSession(BaseModel):
                 else (raw or "")
             )
 
+            # Generate replacement based on strategy
+            if obfuscation_strategy == "faker":
+                from obfuscation.faker_strategies import get_faker_replacement
+                replacement = get_faker_replacement(f.category)
+            else:
+                from obfuscation.strategies import get_replacement
+                replacement = get_replacement(f.category)
+
             items.append(ReviewItem(
                 finding_id=f.id,
                 file=f.file,
@@ -172,10 +189,11 @@ class ReviewSession(BaseModel):
                 scanners=f.scanners,
                 match_display=match_display,
                 raw_match=raw if obfuscatable else None,
-                replacement=get_replacement(f.category),
+                replacement=replacement,
                 obfuscatable=obfuscatable,
                 non_obfuscatable_reason=reason,
                 decision="manual" if not obfuscatable else "pending",
+                obfuscation_strategy=obfuscation_strategy,
             ))
 
         return cls(

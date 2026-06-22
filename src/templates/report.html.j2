@@ -152,6 +152,7 @@
   .obf-skipped  { background: #1a1a2e; color: #a0aec0; border: 1px solid #4a5568; }
   .obf-manual   { background: #2d1f0a; color: #f6ad55; border: 1px solid #c05621; }
   .obf-pending  { background: #1e2533; color: #718096; border: 1px solid #4a5568; }
+  .obf-faker    { background: #1a2d3d; color: #63b3ed; border: 1px solid #2c5aa0; }
   .obf-reason   { display: block; font-size: .65rem; color: #a0aec0; margin-top: .2rem;
                   font-style: italic; max-width: 180px; white-space: normal; }
   .card.obfuscated { background: #0d2e1a; border-color: #38a169; }
@@ -349,7 +350,11 @@
             {% set obf = obfuscation_items.get(f.id) %}
             {% if obf %}
               {% if obf.decision == 'approved' %}
-                <span class="obf-badge obf-approved" aria-label="Obfuscated to {{ obf.replacement }}">&#10003; Obfuscated</span>
+                {% if obf.obfuscation_strategy == 'faker' %}
+                  <span class="obf-badge obf-faker" aria-label="Obfuscated with Faker to {{ obf.replacement }}">✦ Faker</span>
+                {% else %}
+                  <span class="obf-badge obf-approved" aria-label="Obfuscated to {{ obf.replacement }}">&#10003; Obfuscated</span>
+                {% endif %}
                 <code style="display:block;margin-top:.25rem;font-size:.7rem;">{{ obf.replacement }}</code>
               {% elif obf.decision == 'skipped' %}
                 <span class="obf-badge obf-skipped">Skipped</span>

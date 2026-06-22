@@ -79,6 +79,9 @@ def _build_info_grid(item: "ReviewItem", show_secrets: bool) -> "Table":
     grid.add_row("Confidence", conf_str)
     match_val = item.raw_match if (show_secrets and item.raw_match) else item.match_display
     grid.add_row("Match", f"[bold red]{match_val}[/bold red]")
+    
+    strategy_label = f"[bold][cyan]{item.obfuscation_strategy}[/cyan][/bold]" if item.obfuscation_strategy == "faker" else item.obfuscation_strategy
+    grid.add_row("Strategy", strategy_label)
     grid.add_row("Replace with", f"[green]{item.replacement}[/green]")
     if not item.obfuscatable:
         grid.add_row("Note", f"[yellow]{item.non_obfuscatable_reason}[/yellow]")
@@ -137,6 +140,20 @@ def _decide_skip(item: "ReviewItem", console: "Console") -> None:
     item.skip_reason = _clean_skip_reason(skip_reason)
 
 
+def _decide_toggle_faker(item: "ReviewItem", console: "Console") -> None:
+    """Toggle between redaction and faker strategies."""
+    if item.obfuscation_strategy == "faker":
+        item.obfuscation_strategy = "redaction"
+        from obfuscation.strategies import get_replacement
+        item.replacement = get_replacement(item.category)
+        console.print(f"  [dim]Switched to redaction: {item.replacement}[/dim]")
+    else:
+        item.obfuscation_strategy = "faker"
+        from obfuscation.faker_strategies import get_faker_replacement
+        item.replacement = get_faker_replacement(item.category)
+        console.print(f"  [dim]Switched to Faker: {item.replacement}[/dim]")
+
+
 def _decide_approve_all(item: "ReviewItem", session: "ReviewSession", console: "Console") -> None:
     count = _apply_category_action(session, item.category, "approved")
     item.decision = "approved"
@@ -170,13 +187,14 @@ def _prompt_decision(
     handlers = {
         "a": lambda: _decide_approve(item),
         "e": lambda: _decide_edit(item, console),
+        "f": lambda: _decide_toggle_faker(item, console),
         "s": lambda: _decide_skip(item, console),
         "A": lambda: _decide_approve_all(item, session, console),
         "S": lambda: _decide_skip_all(item, session, console),
     }
     while True:
         choice = Prompt.ask(
-            r"  [bold]Decision[/bold] (\[a]pprove / \[e]dit+approve / \[s]kip / \[A]ll-approve / \[S]kip-all / \[q]uit)",
+            r"  [bold]Decision[/bold] (\[a]pprove / \[e]dit+approve / \[f]aker / \[s]kip / \[A]ll-approve / \[S]kip-all / \[q]uit)",
             console=console,
             default="s",
         ).strip()
@@ -190,7 +208,7 @@ def _prompt_decision(
                 session.save(session_path)
             console.print("\n[dim]Review paused — re-run with --apply-session to resume.[/dim]")
             return session
-        console.print("  [red]Invalid choice — enter a, e, s, A, S, or q.[/red]")
+        console.print("  [red]Invalid choice — enter a, e, f, s, A, S, or q.[/red]")
 
 
 def _auto_approve_by_severity(
