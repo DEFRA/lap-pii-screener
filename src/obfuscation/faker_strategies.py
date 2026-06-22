@@ -1,12 +1,21 @@
-"""Generate realistic fake data to replace PII using Faker library."""
+"""Generate realistic fake data to replace PII using Faker library.
+
+Faker is an optional runtime dependency. Install it with::
+
+    pip install faker
+
+"""
 from __future__ import annotations
 
-from faker import Faker
+try:
+    from faker import Faker as _Faker
+    _faker = _Faker()
+    FAKER_AVAILABLE = True
+except ImportError:  # pragma: no cover
+    _faker = None  # type: ignore[assignment]
+    FAKER_AVAILABLE = False
 
-# Use a single Faker instance
-_faker = Faker()
-
-# Category → Faker method mapping
+# Category → Faker method mapping (lambdas are only called when _faker is not None)
 _FAKER_GENERATORS: dict[str, callable] = {
     # PII
     "pii_email":              lambda: _faker.email(),
@@ -60,8 +69,13 @@ def set_seed(seed: int | None = None) -> None:
     
     Pass None to disable seeding (random mode).
     """
+    if not FAKER_AVAILABLE:
+        raise ImportError(
+            "The 'faker' package is required for this feature. "
+            "Install it with: pip install faker"
+        )
     if seed is not None:
-        Faker.seed(seed)
+        _faker.seed_instance(seed)  # type: ignore[union-attr]
 
 
 def get_faker_replacement(category: str) -> str:
@@ -74,14 +88,22 @@ def get_faker_replacement(category: str) -> str:
     
     Returns:
         A realistic fake value appropriate for the category.
+    
+    Raises:
+        ImportError: If the 'faker' package is not installed.
     """
+    if not FAKER_AVAILABLE:
+        raise ImportError(
+            "The 'faker' package is required for Faker obfuscation. "
+            "Install it with: pip install faker"
+        )
     generator = _FAKER_GENERATORS.get(category)
     if generator:
         try:
             return generator()
         except Exception:
             # If generation fails, return a safe fallback
-            return _faker.password(length=32)
+            return _faker.password(length=32)  # type: ignore[union-attr]
     # Unknown category — return generic password
-    return _faker.password(length=32)
+    return _faker.password(length=32)  # type: ignore[union-attr]
 

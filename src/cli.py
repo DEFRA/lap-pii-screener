@@ -1276,6 +1276,17 @@ def obfuscate(
         _console.print(f"Valid options: {', '.join(sorted(valid_strategies))}")
         raise typer.Exit(code=1)
 
+    # Check faker availability if faker-based strategy is requested
+    if obfuscation_strategy in {"faker", "all"}:
+        from obfuscation.faker_strategies import FAKER_AVAILABLE
+        if not FAKER_AVAILABLE:
+            _console.print(
+                "[bold red]The 'faker' package is required for the "
+                f"'{obfuscation_strategy}' obfuscation strategy.[/bold red]"
+            )
+            _console.print("Install it with: [bold]pip install faker[/bold]")
+            raise typer.Exit(code=1)
+
     # ── Build session (while match still holds raw text from show_secrets=True) ─
     # For "all" strategy, default to "redaction" initially; user picks per-item in TUI
     initial_strategy = "redaction" if obfuscation_strategy == "all" else obfuscation_strategy
