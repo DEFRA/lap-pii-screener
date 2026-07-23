@@ -30,6 +30,7 @@ from pathlib import Path
 # ── Constants ─────────────────────────────────────────────────────────────────
 
 AIRGAP_PREFIX = "sensitive-scanner-airgap"
+SENSITIVE_STORE_DIR = ".sensitive-scanner"
 AIRGAP_OPTIONAL_GROUPS: tuple[str, ...] = ("semgrep", "spacy")
 SPACY_MODEL_DIST = "en-core-web-sm"
 SPACY_MODEL_MODULE = "en_core_web_sm"
@@ -300,7 +301,7 @@ def create_bundle(
             raise RuntimeError(f"Air-gap wheel download failed: {wheel_note}")
 
         _print("[dim]  → copying scanner assets...[/dim]")
-        local_store = stage / ".sensitive-scanner"
+        local_store = stage / SENSITIVE_STORE_DIR
         copied = []
         if safe_copy(BIN_DIR, local_store / "bin"):
             copied.append("bin")
@@ -332,6 +333,69 @@ def create_bundle(
     return out_zip
 
 
+# ── install_bundle helpers ────────────────────────────────────────────────────
+
+
+def _read_bundle_manifest(tmp: Path) -> tuple[list[str], list[str]]:
+    """Read requirements from the bundle manifest. Returns (base_reqs, optional_reqs)."""
+    manifest_path = tmp / "manifest.json"
+    base_reqs: list[str] = []
+    optional_reqs: list[str] = []
+    if manifest_path.exists():
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        base_reqs = [str(req) for req in manifest.get("base_requirements", [])]
+        optional_reqs = [str(req) for req in manifest.get("optional_requirements", [])]
+    return base_reqs, optional_reqs
+
+
+def _install_scanner_assets(tmp: Path, print_fn: Callable[[str], None]) -> bool:
+    """Copy .sensitive-scanner assets from the bundle to the home directory.
+
+    Returns True when at least one entry was copied.
+    """
+    src_store = tmp / SENSITIVE_STORE_DIR
+    dst_store = Path.home() / SENSITIVE_STORE_DIR
+    copied_any = False
+    if src_store.exists():
+        for p in src_store.iterdir():
+            copied_any |= safe_copy(p, dst_store / p.name)
+    else:
+        print_fn(f"[bold yellow]Warning:[/bold yellow] Bundle has no {SENSITIVE_STORE_DIR} payload.")
+    return copied_any
+
+
+def _install_wheels_offline(
+    wheels: Path,
+    direct_reqs: list[str],
+    repo_root: Path,
+    print_fn: Callable[[str], None],
+) -> None:
+    """Install Python packages from local wheels via pip.
+
+    Raises:
+        RuntimeError: When pip exits with a non-zero return code.
+    """
+    if wheels.exists() and direct_reqs:
+        cmd = [
+            sys.executable, "-m", "pip", "install",
+            "--no-index", "--find-links", str(wheels),
+            *direct_reqs,
+        ]
+        proc = subprocess.run(cmd, capture_output=True, text=True, cwd=str(repo_root), timeout=1200)
+        if proc.returncode != 0:
+            err = proc.stderr.strip() or proc.stdout.strip() or "offline pip install failed"
+            raise RuntimeError(f"Offline package install failed: {err.splitlines()[-1]}")
+    else:
+        print_fn("[bold yellow]Warning:[/bold yellow] Wheels or bundle requirements missing; skipped pip install.")
+
+
+def _restore_bundled_site_packages(tmp: Path, print_fn: Callable[[str], None]) -> None:
+    """Restore bundled site-packages into the active environment. Warns if nothing was restored."""
+    restored = restore_site_packages(tmp / "site-packages")
+    if restored == 0:
+        print_fn("[bold yellow]Warning:[/bold yellow] No bundled site-packages payload restored.")
+
+
 def install_bundle(bundle_path: Path, repo_root: Path, *, console: object = None) -> None:
     """Install scanner assets and Python packages from a local offline bundle zip.
 
@@ -359,45 +423,14 @@ def install_bundle(bundle_path: Path, repo_root: Path, *, console: object = None
         with zipfile.ZipFile(bundle) as zf:
             zf.extractall(tmp)
 
-        manifest_path = tmp / "manifest.json"
-        base_reqs: list[str] = []
-        optional_reqs: list[str] = []
-        if manifest_path.exists():
-            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-            base_reqs = [str(req) for req in manifest.get("base_requirements", [])]
-            optional_reqs = [str(req) for req in manifest.get("optional_requirements", [])]
-
-        src_store = tmp / ".sensitive-scanner"
-        dst_store = Path.home() / ".sensitive-scanner"
-        copied_any = False
-        if src_store.exists():
-            for p in src_store.iterdir():
-                copied_any |= safe_copy(p, dst_store / p.name)
-        else:
-            _print("[bold yellow]Warning:[/bold yellow] Bundle has no .sensitive-scanner payload.")
-
-        wheels = tmp / "wheels"
-        direct_reqs = [*base_reqs, *optional_reqs]
-        if wheels.exists() and direct_reqs:
-            cmd = [
-                sys.executable, "-m", "pip", "install",
-                "--no-index", "--find-links", str(wheels),
-                *direct_reqs,
-            ]
-            proc = subprocess.run(cmd, capture_output=True, text=True, cwd=str(repo_root), timeout=1200)
-            if proc.returncode != 0:
-                err = proc.stderr.strip() or proc.stdout.strip() or "offline pip install failed"
-                raise RuntimeError(f"Offline package install failed: {err.splitlines()[-1]}")
-        else:
-            _print("[bold yellow]Warning:[/bold yellow] Wheels or bundle requirements missing; skipped pip install.")
-
-        restored = restore_site_packages(tmp / "site-packages")
-        if restored == 0:
-            _print("[bold yellow]Warning:[/bold yellow] No bundled site-packages payload restored.")
+        base_reqs, optional_reqs = _read_bundle_manifest(tmp)
+        copied_any = _install_scanner_assets(tmp, _print)
+        _install_wheels_offline(tmp / "wheels", [*base_reqs, *optional_reqs], repo_root, _print)
+        _restore_bundled_site_packages(tmp, _print)
 
     if copied_any:
         _print(
             f"\n[bold green]Installed scanner assets from bundle into[/bold green] "
-            f"{Path.home() / '.sensitive-scanner'}"
+            f"{Path.home() / SENSITIVE_STORE_DIR}"
         )
     _print("[bold green]Air-gap bundle install complete.[/bold green]")
