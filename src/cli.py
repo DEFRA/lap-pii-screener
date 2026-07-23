@@ -15,6 +15,8 @@ Usage examples:
 from __future__ import annotations
 
 import asyncio
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 from typing import Optional
@@ -628,6 +630,25 @@ _SR_WARN = "[bold yellow]⚠ [/bold yellow]"
 _SR_FAIL = "[bold red]✗ [/bold red]"
 _SR_SKIP = "[dim]–[/dim]"
 
+def _create_airgap_bundle(non_interactive: bool = False) -> Path:
+    """Create an offline bundle with downloaded scanner assets and Python wheels."""
+    from scanners.airgap_manager import create_bundle
+    try:
+        return create_bundle(_ROOT.parent, Path.cwd(), console=_console, non_interactive=non_interactive)
+    except RuntimeError as exc:
+        _console.print(f"[bold red]{exc}[/bold red]")
+        raise typer.Exit(code=1)
+
+
+def _install_airgap_bundle(bundle_path: Path) -> None:
+    """Install scanner assets and Python packages from a local offline bundle zip."""
+    from scanners.airgap_manager import install_bundle
+    try:
+        install_bundle(bundle_path, _ROOT.parent, console=_console)
+    except (FileNotFoundError, RuntimeError) as exc:
+        _console.print(f"[bold red]{exc}[/bold red]")
+        raise typer.Exit(code=1)
+
 
 def _run_gitleaks_setup(check: bool, results: list) -> None:
     """Append Gitleaks status row(s) to *results*."""
@@ -943,6 +964,16 @@ def setup(
         "--non-interactive",
         help="Skip confirmation prompts (for scripted / CI use).",
     ),
+    airgap: bool = typer.Option(
+        False,
+        "--airgap",
+        help="Create an offline installation bundle zip in the current repository.",
+    ),
+    airgap_bundle: Optional[Path] = typer.Option(
+        None,
+        "--airgap-bundle",
+        help="Install from an offline bundle zip created by --airgap.",
+    ),
 ) -> None:
     """
     Install and configure sensitive-scanner dependencies.
@@ -953,10 +984,24 @@ def setup(
     --sonarqube:        also downloads SonarQube CE + sonar-scanner-cli (~550 MB).
     --all:              everything above.
     --check:            report current status without installing anything.
+    --airgap:           create an offline installation bundle zip.
+    --airgap-bundle:    install from a previously created offline bundle zip.
     """
     import sys as _sys
     from rich.table import Table
     from scanners.sonarqube_manager import _SQ_DIR
+
+    if airgap and airgap_bundle is not None:
+        _console.print("[bold red]Choose one:[/bold red] use either --airgap or --airgap-bundle, not both.")
+        raise typer.Exit(code=1)
+
+    if airgap:
+        _create_airgap_bundle(non_interactive=non_interactive)
+        return
+
+    if airgap_bundle is not None:
+        _install_airgap_bundle(airgap_bundle)
+        return
 
     do_sonarqube = sonarqube or all_deps
     do_spacy = spacy_nlp or all_deps

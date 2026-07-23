@@ -49,7 +49,7 @@ META_FILE = _BASE_DIR / "meta.json"
 _GITHUB_LATEST = "https://api.github.com/repos/{owner}/{repo}/releases/latest"
 _SQ_BINARIES_URL = (
     "https://binaries.sonarsource.com/Distribution/sonarqube/"
-    "sonarqube-{ver}-community.zip"
+    "sonarqube-{ver}.zip"
 )
 _TEMURIN_URL = "https://adoptium.net/temurin/releases/"
 
@@ -373,8 +373,7 @@ async def ensure_sonar_scanner(progress_callback=None) -> Optional[Path]:
             break
     if not download_url:
         download_url = (
-            f"https://github.com/SonarSource/sonar-scanner-cli"
-            f"/releases/download/{version}/{asset}"
+            f"https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/{asset}"
         )
 
     result = await _download_and_extract_zip(

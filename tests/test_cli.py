@@ -794,6 +794,42 @@ class TestSetupSonarqube:
         assert results[0][1] == cli._SR_OK
 
 
+class TestSetupAirgap:
+    def test_setup_airgap_dispatches(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        called = {"v": False}
+
+        def _fake_bundle(**kwargs) -> Path:  # noqa: ANN003
+            called["v"] = True
+            return Path("bundle.zip")
+
+        monkeypatch.setattr(cli, "_create_airgap_bundle", _fake_bundle)
+        result = runner.invoke(cli.app, ["setup", "--airgap", "--non-interactive"])
+        assert result.exit_code == 0
+        assert called["v"] is True
+
+    def test_setup_airgap_bundle_dispatches(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+        bundle = tmp_path / "bundle.zip"
+        bundle.write_text("x", encoding="utf-8")
+        called = {"path": None}
+
+        def _fake_install(path: Path) -> None:
+            called["path"] = path
+
+        monkeypatch.setattr(cli, "_install_airgap_bundle", _fake_install)
+        result = runner.invoke(cli.app, ["setup", "--airgap-bundle", str(bundle)])
+        assert result.exit_code == 0
+        assert called["path"] == bundle
+
+    def test_setup_airgap_flags_mutually_exclusive(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+        monkeypatch.setattr(cli, "_create_airgap_bundle", MagicMock())
+        monkeypatch.setattr(cli, "_install_airgap_bundle", MagicMock())
+        bundle = tmp_path / "bundle.zip"
+        bundle.write_text("x", encoding="utf-8")
+        result = runner.invoke(cli.app, ["setup", "--airgap", "--airgap-bundle", str(bundle)])
+        assert result.exit_code == 1
+        assert "either --airgap or --airgap-bundle" in result.stdout
+
+
 # --------------------------------------------------------------------------- #
 # obfuscate helpers                                                            #
 # --------------------------------------------------------------------------- #
