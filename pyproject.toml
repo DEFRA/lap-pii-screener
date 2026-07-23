@@ -9,9 +9,7 @@ description = "Code-agnostic MCP agent to scan for PII, API keys, and secrets"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
-authors = [
-    { name = "Ryan Corcoran" },
-]
+authors = [{ name = "Ryan Corcoran" }]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -30,15 +28,41 @@ dependencies = [
     "pyyaml==6.0.3",
     "aiofiles==25.1.0",
     "typer==0.26.7",
-    "pip>=26.1.2",
 ]
 
 [project.optional-dependencies]
 spacy = ["spacy==3.8.13"]
 semgrep = ["semgrep==1.167.0"]
-docs = ["python-docx==1.2.0", "openpyxl==3.1.5", "striprtf==0.0.32", "olefile==0.47", "pdfminer.six==20260107", "extract-msg==0.55.0", "xlrd==2.0.2", "pyarrow==24.0.0", "fastavro==1.12.2"]
-all = ["spacy==3.8.13", "semgrep==1.167.0", "python-docx==1.2.0", "openpyxl==3.1.5", "striprtf==0.0.32", "olefile==0.47", "pdfminer.six==20260107", "extract-msg==0.55.0", "xlrd==2.0.2", "pyarrow==24.0.0", "fastavro==1.12.2"]
-dev = ["pytest==9.1.0", "pytest-cov==6.1.0", "pytest-asyncio==1.4.0", "pre-commit==4.2.0"]
+docs = [
+    "python-docx==1.2.0",
+    "openpyxl==3.1.5",
+    "striprtf==0.0.32",
+    "olefile==0.47",
+    "pdfminer.six==20260107",
+    "extract-msg==0.55.0",
+    "xlrd==2.0.2",
+    "pyarrow==24.0.0",
+    "fastavro==1.12.2",
+]
+all = [
+    "spacy==3.8.13",
+    "semgrep==1.167.0",
+    "python-docx==1.2.0",
+    "openpyxl==3.1.5",
+    "striprtf==0.0.32",
+    "olefile==0.47",
+    "pdfminer.six==20260107",
+    "extract-msg==0.55.0",
+    "xlrd==2.0.2",
+    "pyarrow==24.0.0",
+    "fastavro==1.12.2",
+]
+dev = [
+    "pytest==9.1.0",
+    "pytest-cov==6.1.0",
+    "pytest-asyncio==1.4.0",
+    "pre-commit==4.2.0",
+]
 
 [project.urls]
 Repository = "https://github.com/DEFRA/lap-pii-screener"
@@ -50,7 +74,13 @@ sensitive-scanner-mcp = "server:main"
 
 [tool.hatch.build.targets.wheel]
 sources = ["src"]
-packages = ["src/scanners", "src/models", "src/remediation", "src/reporting", "src/obfuscation"]
+packages = [
+    "src/scanners",
+    "src/models",
+    "src/remediation",
+    "src/reporting",
+    "src/obfuscation",
+]
 
 [tool.hatch.build.targets.wheel.force-include]
 "src/config" = "config"
@@ -72,7 +102,13 @@ select = ["E", "F", "W", "I", "N", "UP", "S", "B"]
 ignore = ["E501", "S101", "S603", "S607", "S324", "S311"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["models", "scanners", "reporting", "remediation", "obfuscation"]
+known-first-party = [
+    "models",
+    "scanners",
+    "reporting",
+    "remediation",
+    "obfuscation",
+]
 src-paths = ["src"]
 
 [tool.pytest.ini_options]
@@ -96,4 +132,3 @@ exclude_lines = [
     "@abstractmethod",
     "raise NotImplementedError",
 ]
-
