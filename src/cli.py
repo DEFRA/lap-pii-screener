@@ -901,7 +901,7 @@ def _setup_sonarqube_start(check: bool, results: list) -> None:
         return
 
     if not up:
-        results.append((_LABEL_SONARQUBE_START, _SR_WARN, "did not become UP within 3 min — try starting manually"))
+        results.append((_LABEL_SONARQUBE_START, _SR_WARN, "did not become UP — check logs and try starting manually"))
         return
 
     results.append((_LABEL_SONARQUBE_START, _SR_OK, f"running at {host_url}"))

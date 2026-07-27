@@ -469,9 +469,12 @@ async def start_and_wait(
     tick_callback=None,
 ) -> bool:
     """
-    Launch SonarQube (in background) then poll /api/system/status until UP.
+    Launch SonarQube and race process exit against /api/system/status == UP.
     tick_callback(elapsed, total) is called every 5 s if provided.
-    Returns True when UP, False on timeout.
+    Returns True when UP is observed first, otherwise False.
+
+    If the start process exits first with a non-zero exit code, logs the error
+    and directs user to SonarQube's log files for debugging.
     """
     script = _start_script(sq_home)
     if not script:
@@ -481,14 +484,16 @@ async def start_and_wait(
         )
         return False
 
+    process: asyncio.subprocess.Process
     if platform.system() == "Windows":
-        await asyncio.create_subprocess_exec(
+        # Launch in a new console window so user can see SonarQube output and control it
+        process = await asyncio.create_subprocess_exec(
             str(script),
             creationflags=subprocess.CREATE_NEW_CONSOLE,
             close_fds=True,
         )
     else:
-        await asyncio.create_subprocess_exec(
+        process = await asyncio.create_subprocess_exec(
             str(script), "start",
             stdout=asyncio.subprocess.DEVNULL,
             stderr=asyncio.subprocess.DEVNULL,
@@ -497,18 +502,51 @@ async def start_and_wait(
     host = f"http://localhost:{port}"
     start = time.monotonic()
 
-    async with httpx.AsyncClient() as client:
-        while (elapsed := time.monotonic() - start) < max_wait:
-            if tick_callback:
-                tick_callback(int(elapsed), max_wait)
-            try:
-                resp = await client.get(f"{host}/api/system/status", timeout=5)
-                if resp.json().get("status") == "UP":
-                    return True
-            except (httpx.HTTPError, ValueError):
-                pass
-            await asyncio.sleep(5)
+    async def _wait_for_health_up() -> bool:
+        async with httpx.AsyncClient() as client:
+            while True:
+                elapsed = int(time.monotonic() - start)
+                if tick_callback:
+                    tick_callback(elapsed, max_wait)
+                try:
+                    resp = await client.get(f"{host}/api/system/status", timeout=5)
+                    if resp.json().get("status") == "UP":
+                        return True
+                except (httpx.HTTPError, ValueError):
+                    pass
+                await asyncio.sleep(5)
 
+    async def _wait_for_process_exit() -> int:
+        return await process.wait()
+
+    health_task = asyncio.create_task(_wait_for_health_up())
+    process_task = asyncio.create_task(_wait_for_process_exit())
+    done, pending = await asyncio.wait(
+        {health_task, process_task},
+        return_when=asyncio.FIRST_COMPLETED,
+    )
+
+    for task in pending:
+        task.cancel()
+    if pending:
+        await asyncio.gather(*pending, return_exceptions=True)
+
+    if health_task in done:
+        # Health check succeeded; SonarQube is running (process keeps running in background)
+        return health_task.result()
+
+    # Process exited before health check succeeded
+    returncode = process_task.result()
+    if returncode != 0:
+        log_dir = sq_home / "logs"
+        print(
+            f"[sonarqube_manager] SonarQube start process exited with code {returncode}",
+            file=sys.stderr,
+        )
+        print(
+            f"[sonarqube_manager] Check logs at: {log_dir}",
+            file=sys.stderr,
+        )
     return False
 
 

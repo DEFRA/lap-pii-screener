@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from models.finding import ScanConfig
+from scanners import pii_scanner as pii
 from scanners.pii_scanner import (
     PIIScanner,
     _classify_name_columns,
@@ -550,10 +551,13 @@ class TestPIIScannerIntegration:
         assert scanner._files_skipped >= 1
 
     @pytest.mark.asyncio
-    async def test_scan_binary_doc_without_extractor_is_skipped(self, tmp_path: Path) -> None:
+    async def test_scan_binary_doc_without_extractor_is_skipped(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         # No optional extractor installed -> .docx yields no text and is skipped.
         (tmp_path / "report.docx").write_bytes(b"PK\x03\x04 not a real docx")
         scanner = PIIScanner()
+        monkeypatch.setattr(pii, "_DOCX_AVAILABLE", False)
         await scanner.scan(ScanConfig(path=str(tmp_path), show_secrets=True))
         assert scanner._files_skipped >= 1
 
