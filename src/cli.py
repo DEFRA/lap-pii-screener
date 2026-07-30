@@ -895,13 +895,13 @@ def _setup_sonarqube_start(check: bool, results: list) -> None:
     _console.print(f"\n  Starting SonarQube on port {SONAR_PORT} (first start can take ~2 min)...")
     host_url = f"http://localhost:{SONAR_PORT}"
     try:
-        up = asyncio.run(start_and_wait(sq_home, port=SONAR_PORT, max_wait=180))
+        up = asyncio.run(start_and_wait(sq_home, port=SONAR_PORT))
     except Exception as exc:
         results.append((_LABEL_SONARQUBE_START, _SR_FAIL, str(exc)))
         return
 
     if not up:
-        results.append((_LABEL_SONARQUBE_START, _SR_WARN, "did not become UP — check logs and try starting manually"))
+        results.append((_LABEL_SONARQUBE_START, _SR_WARN, "did not become UP within 3 min — try starting manually"))
         return
 
     results.append((_LABEL_SONARQUBE_START, _SR_OK, f"running at {host_url}"))

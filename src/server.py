@@ -285,12 +285,12 @@ def _spacy_status_lines() -> list[str]:
         except OSError:
             return [
                 "**spaCy NLP:** ⚠️  spaCy installed but model missing — "
-                "run `python -m spacy download en_core_web_sm`"
+                "run `uv run python -m spacy download en_core_web_sm`"
             ]
     except ImportError:
         return [
             "**spaCy NLP:** ℹ️  not installed (optional) — "
-            "run `pip install spacy && python -m spacy download en_core_web_sm`"
+            "run `uv pip install spacy && uv run python -m spacy download en_core_web_sm`"
         ]
 
 

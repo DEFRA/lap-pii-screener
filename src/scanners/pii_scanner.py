@@ -377,7 +377,7 @@ def _ensure_spacy() -> None:  # pragma: no cover - requires optional spaCy insta
             _SPACY_AVAILABLE = True
         except OSError:
             print("[pii_scanner] spaCy model 'en_core_web_sm' not found. "
-                  "Run: python -m spacy download en_core_web_sm", file=sys.stderr)
+                  "Run: uv run python -m spacy download en_core_web_sm", file=sys.stderr)
     except ImportError:
         pass  # spaCy is optional
 

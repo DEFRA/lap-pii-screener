@@ -73,17 +73,17 @@ async def _prefetch_bool_step(
 
 
 def _install_semgrep() -> tuple[bool, str]:
-    """Run pip install semgrep synchronously. Returns (ok, message)."""
+    """Run uv pip install semgrep synchronously. Returns (ok, message)."""
     try:
         r = subprocess.run(
-            [sys.executable, "-m", "pip", "install", "--quiet", "semgrep"],
+            ["uv", "pip", "install", "--quiet", "semgrep"],
             capture_output=True, text=True, timeout=300,
         )
     except Exception as exc:
         return False, str(exc)
     if r.returncode == 0:
         return True, "ready"
-    err = r.stderr.strip().splitlines()[-1] if r.stderr.strip() else "pip install failed"
+    err = r.stderr.strip().splitlines()[-1] if r.stderr.strip() else "uv pip install failed"
     return False, err
 
 
@@ -94,7 +94,7 @@ async def _prefetch_spacy(spacy_model_dir: str, print_fn: Callable[[str], None])
     return await _prefetch_bool_step("spaCy model", asyncio.to_thread(bundle_spacy_model, spacy_model_dir), print_fn=print_fn)
 
 async def _prefetch_semgrep(print_fn: Callable[[str], None]) -> tuple[bool, str]:
-    """Install semgrep via pip in a thread, logging its start and outcome."""
+    """Install semgrep via uv pip in a thread, logging its start and outcome."""
     return await _prefetch_bool_step("semgrep", asyncio.to_thread(_install_semgrep), print_fn=print_fn)
 
 
@@ -148,20 +148,20 @@ def optional_requirements(repo_root: Path) -> list[str]:
 
 
 def download_wheels(dest: Path, repo_root: Path) -> tuple[bool, str]:
-    """Download dependency wheels into *dest* using pip download."""
+    """Download dependency wheels into *dest* using uv pip download."""
     base_reqs = base_requirements(repo_root)
     opt_reqs = optional_requirements(repo_root)
     direct_reqs = [*base_reqs, *opt_reqs]
     if not direct_reqs:
         return False, "No project requirements found in pyproject.toml"
     cmd = [
-        sys.executable, "-m", "pip", "download",
+        "uv", "pip", "download",
         "--only-binary=:all:", "-d", str(dest),
         *direct_reqs,
     ]
     proc = subprocess.run(cmd, capture_output=True, text=True, cwd=str(repo_root), timeout=1200)
     if proc.returncode != 0:
-        err = proc.stderr.strip() or proc.stdout.strip() or "pip download failed"
+        err = proc.stderr.strip() or proc.stdout.strip() or "uv pip download failed"
         return False, err.splitlines()[-1]
     return True, "downloaded"
 
@@ -199,18 +199,18 @@ def _ensure_spacy_for_bundle() -> tuple[bool, str]:
         import spacy  # type: ignore  # noqa: F401
     except ImportError:
         r = subprocess.run(
-            [sys.executable, "-m", "pip", "install", "--quiet", "spacy"],
+            ["uv", "pip", "install", "--quiet", "spacy"],
             capture_output=True, text=True, timeout=300,
         )
         if r.returncode != 0:
-            return False, "spaCy pip install failed"
+            return False, "spaCy uv pip install failed"
 
     try:
         import spacy as _spacy  # type: ignore
         _spacy.load(SPACY_MODEL_MODULE)
     except OSError:
         r = subprocess.run(
-            [sys.executable, "-m", "spacy", "download", SPACY_MODEL_MODULE],
+            ["uv", "run", "python", "-m", "spacy", "download", SPACY_MODEL_MODULE],
             capture_output=True, text=True, timeout=300,
         )
         if r.returncode != 0:
@@ -370,23 +370,23 @@ def _install_wheels_offline(
     repo_root: Path,
     print_fn: Callable[[str], None],
 ) -> None:
-    """Install Python packages from local wheels via pip.
+    """Install Python packages from local wheels via uv pip.
 
     Raises:
-        RuntimeError: When pip exits with a non-zero return code.
+        RuntimeError: When uv pip exits with a non-zero return code.
     """
     if wheels.exists() and direct_reqs:
         cmd = [
-            sys.executable, "-m", "pip", "install",
+            "uv", "pip", "install",
             "--no-index", "--find-links", str(wheels),
             *direct_reqs,
         ]
         proc = subprocess.run(cmd, capture_output=True, text=True, cwd=str(repo_root), timeout=1200)
         if proc.returncode != 0:
-            err = proc.stderr.strip() or proc.stdout.strip() or "offline pip install failed"
+            err = proc.stderr.strip() or proc.stdout.strip() or "offline uv pip install failed"
             raise RuntimeError(f"Offline package install failed: {err.splitlines()[-1]}")
     else:
-        print_fn("[bold yellow]Warning:[/bold yellow] Wheels or bundle requirements missing; skipped pip install.")
+        print_fn("[bold yellow]Warning:[/bold yellow] Wheels or bundle requirements missing; skipped uv pip install.")
 
 
 def _restore_bundled_site_packages(tmp: Path, print_fn: Callable[[str], None]) -> None:
@@ -401,12 +401,12 @@ def install_bundle(bundle_path: Path, repo_root: Path, *, console: object = None
 
     Args:
         bundle_path: Path to the bundle zip produced by :func:`create_bundle`.
-        repo_root:   Repository root used as cwd for the pip install step.
+        repo_root:   Repository root used as cwd for the uv pip install step.
         console:     Optional Rich Console for progress messages.
 
     Raises:
         FileNotFoundError: When *bundle_path* does not exist or is not a file.
-        RuntimeError:      When the offline pip install step fails.
+        RuntimeError:      When the offline uv pip install step fails.
     """
     bundle = Path(bundle_path).resolve()
     if not bundle.exists() or not bundle.is_file():

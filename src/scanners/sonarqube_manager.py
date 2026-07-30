@@ -26,7 +26,6 @@ import stat
 import subprocess
 import sys
 import tempfile
-import time
 import zipfile
 from pathlib import Path
 from typing import Optional
@@ -34,6 +33,7 @@ from typing import Optional
 import aiofiles
 import aiofiles.tempfile
 import httpx
+import psutil
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -449,6 +449,9 @@ async def ensure_sonarqube(progress_callback=None) -> Optional[Path]:
 
 # ── Start and health-wait ─────────────────────────────────────────────────────
 
+_INITIAL_STARTUP_DELAY: int = 30  # seconds — allow JARs to appear in process list
+
+
 def _start_script(sq_home: Path) -> Optional[Path]:
     system = platform.system()
     machine = platform.machine().lower()
@@ -462,19 +465,37 @@ def _start_script(sq_home: Path) -> Optional[Path]:
     return s if s.exists() else None
 
 
+async def _any_sonarqube_jars_running() -> bool:
+    """Return True if any .jar from the SonarQube install directory is running."""
+    sq_dir = str(_SQ_DIR)
+    for proc in psutil.process_iter(["cmdline"]):
+        try:
+            cmdline = " ".join(proc.info["cmdline"] or [])
+            if sq_dir in cmdline and ".jar" in cmdline:
+                return True
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            pass
+    return False
+
+
 async def start_and_wait(
     sq_home: Path,
     port: int = SONAR_PORT,
-    max_wait: int = 180,
+    initial_delay: int = _INITIAL_STARTUP_DELAY,
     tick_callback=None,
 ) -> bool:
     """
-    Launch SonarQube and race process exit against /api/system/status == UP.
-    tick_callback(elapsed, total) is called every 5 s if provided.
-    Returns True when UP is observed first, otherwise False.
+    Launch SonarQube (in background) then poll /api/system/status until UP.
 
-    If the start process exits first with a non-zero exit code, logs the error
-    and directs user to SonarQube's log files for debugging.
+    An initial fixed delay of ``initial_delay`` seconds is applied first to
+    allow the JARs to appear in the process list before polling begins.
+    Polling continues while .jar files from the SonarQube installation directory
+    remain in the process list; returns False if they all exit before the server
+    reports UP.
+
+    tick_callback(elapsed) is called every 5 s during the polling loop
+    if provided.
+    Returns True when UP, False otherwise.
     """
     script = _start_script(sq_home)
     if not script:
@@ -484,69 +505,38 @@ async def start_and_wait(
         )
         return False
 
-    process: asyncio.subprocess.Process
     if platform.system() == "Windows":
-        # Launch in a new console window so user can see SonarQube output and control it
-        process = await asyncio.create_subprocess_exec(
+        await asyncio.create_subprocess_exec(
             str(script),
             creationflags=subprocess.CREATE_NEW_CONSOLE,
             close_fds=True,
         )
     else:
-        process = await asyncio.create_subprocess_exec(
+        await asyncio.create_subprocess_exec(
             str(script), "start",
             stdout=asyncio.subprocess.DEVNULL,
             stderr=asyncio.subprocess.DEVNULL,
         )
 
+    # Initial fixed delay: give JARs time to appear in the process list
+    await asyncio.sleep(initial_delay)
+
     host = f"http://localhost:{port}"
-    start = time.monotonic()
+    elapsed = initial_delay
 
-    async def _wait_for_health_up() -> bool:
-        async with httpx.AsyncClient() as client:
-            while True:
-                elapsed = int(time.monotonic() - start)
-                if tick_callback:
-                    tick_callback(elapsed, max_wait)
-                try:
-                    resp = await client.get(f"{host}/api/system/status", timeout=5)
-                    if resp.json().get("status") == "UP":
-                        return True
-                except (httpx.HTTPError, ValueError):
-                    pass
-                await asyncio.sleep(5)
+    async with httpx.AsyncClient() as client:
+        while await _any_sonarqube_jars_running():
+            if tick_callback:
+                tick_callback(elapsed)
+            try:
+                resp = await client.get(f"{host}/api/system/status", timeout=5)
+                if resp.json().get("status") == "UP":
+                    return True
+            except (httpx.HTTPError, ValueError):
+                pass
+            await asyncio.sleep(5)
+            elapsed += 5
 
-    async def _wait_for_process_exit() -> int:
-        return await process.wait()
-
-    health_task = asyncio.create_task(_wait_for_health_up())
-    process_task = asyncio.create_task(_wait_for_process_exit())
-    done, pending = await asyncio.wait(
-        {health_task, process_task},
-        return_when=asyncio.FIRST_COMPLETED,
-    )
-
-    for task in pending:
-        task.cancel()
-    if pending:
-        await asyncio.gather(*pending, return_exceptions=True)
-
-    if health_task in done:
-        # Health check succeeded; SonarQube is running (process keeps running in background)
-        return health_task.result()
-
-    # Process exited before health check succeeded
-    returncode = process_task.result()
-    if returncode != 0:
-        log_dir = sq_home / "logs"
-        print(
-            f"[sonarqube_manager] SonarQube start process exited with code {returncode}",
-            file=sys.stderr,
-        )
-        print(
-            f"[sonarqube_manager] Check logs at: {log_dir}",
-            file=sys.stderr,
-        )
     return False
 
 

@@ -7,7 +7,7 @@
     "dockerfile": "./Dockerfile"
   },
   "initializeCommand": ".devcontainer/init.sh",
-  "postAttachCommand": "uv sync --all-extras && uv pip install pip",
+  "postCreateCommand": "uv sync --all-extras",
   "mounts": [
     "source=.cache/sensitive-scanner,target=/home/node/.sensitive-scanner,type=bind",
     "source=.cache/uv,target=/home/node/.cache/uv,type=bind"

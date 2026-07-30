@@ -601,7 +601,7 @@ class TestStartAndWait:
         client.__aexit__ = AsyncMock(return_value=False)
         ticks = []
         with patch.object(sm.httpx, "AsyncClient", return_value=client):
-            ok = await sm.start_and_wait(tmp_path, tick_callback=lambda e, t: ticks.append(e))
+            ok = await sm.start_and_wait(tmp_path, tick_callback=lambda e: ticks.append(e))
         assert ok is True
         assert ticks  # tick_callback fired at least once
 

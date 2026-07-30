@@ -2,7 +2,7 @@
 
 Faker is an optional runtime dependency. Install it with::
 
-    pip install faker
+    uv pip install faker
 
 """
 from __future__ import annotations
@@ -72,7 +72,7 @@ def set_seed(seed: int | None = None) -> None:
     if not FAKER_AVAILABLE:
         raise ImportError(
             "The 'faker' package is required for this feature. "
-            "Install it with: pip install faker"
+            "Install it with: uv pip install faker"
         )
     if seed is not None:
         _faker.seed_instance(seed)  # type: ignore[union-attr]
@@ -95,7 +95,7 @@ def get_faker_replacement(category: str) -> str:
     if not FAKER_AVAILABLE:
         raise ImportError(
             "The 'faker' package is required for Faker obfuscation. "
-            "Install it with: pip install faker"
+            "Install it with: uv pip install faker"
         )
     generator = _FAKER_GENERATORS.get(category)
     if generator:
