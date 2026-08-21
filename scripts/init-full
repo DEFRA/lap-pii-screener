@@ -12,3 +12,4 @@ echo "Running sensitive-scanner setup for SonarQube and spaCy..."
 uv run sensitive-scanner setup --sonarqube --spacy
 
 echo "Prerequisite setup completed successfully."
+echo "You will need to run 'export SONAR_TOKEN=<the-above-sonarqube-token>' in your shell before scanning anything."

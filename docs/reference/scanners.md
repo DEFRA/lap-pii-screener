@@ -3,6 +3,7 @@
 PII Screener runs up to four independent scanning engines against a codebase and merges their results. Each engine targets a different class of problem — running them together closes the blind spots that any single tool would leave.
 
 **Page contents**
+
 - [How results are combined](#how-results-are-combined)
 - [Tier architecture](#tier-architecture)
 - [Gitleaks](#gitleaks)
@@ -30,19 +31,22 @@ The `scanners` field on every finding shows every engine that independently flag
 
 Scanners activate automatically based on what is available. The CLI reports the active tier at scan time.
 
-| Tier | Scanners active | What is required |
-|---|---|---|
-| 1 | Gitleaks + Semgrep + Presidio | Python + Gitleaks binary (auto-downloaded) |
-| 2 | + SonarQube Community (Java) | Java 17+ and sonar-scanner CLI |
-| 2 (Docker) | + SonarQube Community (Docker) | Docker Desktop |
-| 3 | + SonarCloud | SonarCloud account + token |
+| Tier | Scanners active                  | What is required                                                       |
+| ---- | -------------------------------- | ---------------------------------------------------------------------- |
+| 1    | Gitleaks + Semgrep + PII scanner | Python, Gitleaks, and Semgrep; Gitleaks is auto-downloaded when needed |
+| 2    | Tier 1 + SonarQube               | A reachable SonarQube backend, either native or container-backed       |
+| 3    | Tier 2 + SonarCloud              | `SONAR_HOST_URL` containing `sonarcloud.io` and `SONAR_TOKEN`          |
+
+The tier describes the deepest backend used, not how it is deployed. Native Java and
+Docker-backed SonarQube both count as tier 2. A requested backend is skipped when it is
+unavailable, so the tier shown in a report can be lower than the set requested by the CLI.
 
 ---
 
 ## Gitleaks
 
 **Implementation:** `scanners/gitleaks_scanner.py`  
-**Rule configuration:** `config/gitleaks.toml`  
+**Rule configuration:** `src/config/gitleaks.toml`
 **Acquired from:** [github.com/gitleaks/gitleaks](https://github.com/gitleaks/gitleaks) (open source, MIT)
 
 ### What it does
@@ -58,18 +62,18 @@ Gitleaks is a purpose-built secret scanner. It scans every file in the target di
 
 ### Custom rules in gitleaks.toml
 
-The file `config/gitleaks.toml` extends the default Gitleaks ruleset with project-specific rules:
+The file `src/config/gitleaks.toml` extends the default Gitleaks ruleset with project-specific rules:
 
-| Rule ID | What it matches |
-|---|---|
-| `custom-pii-email` | Email addresses in any context |
-| `custom-pii-ssn` | US Social Security Numbers |
-| `custom-pii-phone` | UK mobile and international phone numbers |
-| `custom-pii-phone-eu` | EU landline number format |
-| `custom-pii-iban` | IBAN bank account numbers |
-| `custom-pii-passport` | Generic passport number format |
-| `custom-pii-ni-number` | UK National Insurance numbers |
-| `custom-pii-dob` | Dates of birth (ISO and common formats, URL-path-guarded) |
+| Rule ID                | What it matches                                           |
+| ---------------------- | --------------------------------------------------------- |
+| `custom-pii-email`     | Email addresses in any context                            |
+| `custom-pii-ssn`       | US Social Security Numbers                                |
+| `custom-pii-phone`     | UK mobile and international phone numbers                 |
+| `custom-pii-phone-eu`  | EU landline number format                                 |
+| `custom-pii-iban`      | IBAN bank account numbers                                 |
+| `custom-pii-passport`  | Generic passport number format                            |
+| `custom-pii-ni-number` | UK National Insurance numbers                             |
+| `custom-pii-dob`       | Dates of birth (ISO and common formats, URL-path-guarded) |
 
 ### Why Gitleaks was chosen
 
@@ -81,11 +85,11 @@ The file `config/gitleaks.toml` extends the default Gitleaks ruleset with projec
 
 ### Alternatives considered
 
-| Tool | Why not chosen |
-|---|---|
-| **TruffleHog** | Slower on large repos; entropy-based approach generates more false positives |
-| **detect-secrets** | Yelp's tool; good but narrower ruleset and less active maintenance |
-| **git-secrets** | AWS-only rules; does not scan working tree |
+| Tool               | Why not chosen                                                               |
+| ------------------ | ---------------------------------------------------------------------------- |
+| **TruffleHog**     | Slower on large repos; entropy-based approach generates more false positives |
+| **detect-secrets** | Yelp's tool; good but narrower ruleset and less active maintenance           |
+| **git-secrets**    | AWS-only rules; does not scan working tree                                   |
 
 ---
 
@@ -99,11 +103,11 @@ The file `config/gitleaks.toml` extends the default Gitleaks ruleset with projec
 
 Semgrep understands code structure rather than just text. It uses abstract syntax tree (AST) matching to find patterns that are semantically meaningful — for example, a function call with a hardcoded string argument, regardless of whitespace, variable naming, or how the call is split across lines. PII Screener runs three community-maintained rulesets:
 
-| Ruleset | Focus |
-|---|---|
-| `p/secrets` | Hardcoded secrets, tokens, and passwords in source code |
+| Ruleset           | Focus                                                               |
+| ----------------- | ------------------------------------------------------------------- |
+| `p/secrets`       | Hardcoded secrets, tokens, and passwords in source code             |
 | `p/owasp-top-ten` | SQL injection, XSS, insecure deserialisation, broken authentication |
-| `p/default` | General security and quality issues across many languages |
+| `p/default`       | General security and quality issues across many languages           |
 
 ### How it works
 
@@ -122,18 +126,20 @@ Semgrep understands code structure rather than just text. It uses abstract synta
 
 ### Alternatives considered
 
-| Tool | Why not chosen |
-|---|---|
-| **Bandit** | Python-only; Semgrep covers the same ground and more languages |
-| **ESLint security plugins** | JavaScript-only |
-| **CodeQL** | Very powerful but requires a full build environment and significantly more setup overhead |
+| Tool                        | Why not chosen                                                                            |
+| --------------------------- | ----------------------------------------------------------------------------------------- |
+| **Bandit**                  | Python-only; Semgrep covers the same ground and more languages                            |
+| **ESLint security plugins** | JavaScript-only                                                                           |
+| **CodeQL**                  | Very powerful but requires a full build environment and significantly more setup overhead |
 
 ---
 
-## Presidio (custom PII scanner)
+## PII scanner (optional Presidio or spaCy NER)
 
 **Implementation:** `scanners/pii_scanner.py`  
-**Built custom for this project**
+**Built custom for this project**. The CLI identifier is `presidio`, but the scanner itself
+is implemented in `scanners/pii_scanner.py`; Microsoft Presidio is only an optional NER
+backend.
 
 ### Why it was built custom
 
@@ -149,30 +155,30 @@ No existing open-source scanner covered the combination of structured PII patter
 
 A curated set of compiled regular expressions matches well-defined data formats. Each rule has an assigned confidence level reflecting how specific the pattern is:
 
-| Rule ID | What it matches | Confidence | Validation |
-|---|---|---|---|
-| `private_key_pem` | PEM private key headers | 99% | Literal string |
-| `pii_credit_card` | Visa, Mastercard, Amex, Discover | 95% | Luhn algorithm |
-| `pii_nhs_number` | UK NHS numbers (3-3-4 format) | 95% | Modulus-11 checksum |
-| `db_conn_string` | Database URLs with embedded credentials | 92% | URL scheme match |
-| `pii_ssn` | US Social Security Numbers | 90% | Invalid prefix exclusions |
-| `pii_ni_number` | UK National Insurance numbers | 90% | Format-specific regex |
-| `jwt_token` | JSON Web Tokens | 90% | 3-part base64 structure |
-| `hardcoded_password` | `password = "..."` assignments | 88% | Named key context |
-| `pii_email` | Email addresses | 88% | Standard RFC pattern |
-| `pii_iban` | International Bank Account Numbers | 85% | Country code + check digits |
-| `pii_uk_driving_licence` | DVLA driving licence numbers | 85% | DVLA structure |
-| `pii_uk_sort_code` | UK sort codes with named key | 85% | Named key context |
-| `pii_uk_account_number` | UK 8-digit account numbers | 85% | Named key context |
-| `pii_uk_postcode` | UK postcodes | 82% | Outward/inward format |
-| `pii_person_name` | Person names with named key | 80% | Identifier context |
-| `pii_phone` / `pii_uk_phone_mobile` | UK and US phone numbers | 80% | Structured format |
-| `pii_dob` / `pii_dob_uk` | Dates of birth | 78% | URL-path-guarded |
-| `pii_passport` | Generic passport numbers | 72% | Short alphanumeric |
-| `pii_mac_address` | MAC addresses | 70% | 6-octet format |
-| `pii_ip_address` | IPv4 in string literals | 65% | Inside quotes only |
-| `pii_person_name_bare_key` | Name with bare `name` key | 60% | Broad key match |
-| `pii_ipv6_address` | Full IPv6 addresses | 60% | 8-group format |
+| Rule ID                             | What it matches                         | Confidence | Validation                  |
+| ----------------------------------- | --------------------------------------- | ---------- | --------------------------- |
+| `private_key_pem`                   | PEM private key headers                 | 99%        | Literal string              |
+| `pii_credit_card`                   | Visa, Mastercard, Amex, Discover        | 95%        | Luhn algorithm              |
+| `pii_nhs_number`                    | UK NHS numbers (3-3-4 format)           | 95%        | Modulus-11 checksum         |
+| `db_conn_string`                    | Database URLs with embedded credentials | 92%        | URL scheme match            |
+| `pii_ssn`                           | US Social Security Numbers              | 90%        | Invalid prefix exclusions   |
+| `pii_ni_number`                     | UK National Insurance numbers           | 90%        | Format-specific regex       |
+| `jwt_token`                         | JSON Web Tokens                         | 90%        | 3-part base64 structure     |
+| `hardcoded_password`                | `password = "..."` assignments          | 88%        | Named key context           |
+| `pii_email`                         | Email addresses                         | 88%        | Standard RFC pattern        |
+| `pii_iban`                          | International Bank Account Numbers      | 85%        | Country code + check digits |
+| `pii_uk_driving_licence`            | DVLA driving licence numbers            | 85%        | DVLA structure              |
+| `pii_uk_sort_code`                  | UK sort codes with named key            | 85%        | Named key context           |
+| `pii_uk_account_number`             | UK 8-digit account numbers              | 85%        | Named key context           |
+| `pii_uk_postcode`                   | UK postcodes                            | 82%        | Outward/inward format       |
+| `pii_person_name`                   | Person names with named key             | 80%        | Identifier context          |
+| `pii_phone` / `pii_uk_phone_mobile` | UK and US phone numbers                 | 80%        | Structured format           |
+| `pii_dob` / `pii_dob_uk`            | Dates of birth                          | 78%        | URL-path-guarded            |
+| `pii_passport`                      | Generic passport numbers                | 72%        | Short alphanumeric          |
+| `pii_mac_address`                   | MAC addresses                           | 70%        | 6-octet format              |
+| `pii_ip_address`                    | IPv4 in string literals                 | 65%        | Inside quotes only          |
+| `pii_person_name_bare_key`          | Name with bare `name` key               | 60%        | Broad key match             |
+| `pii_ipv6_address`                  | Full IPv6 addresses                     | 60%        | 8-group format              |
 
 #### Date of birth false positive guard
 
@@ -182,7 +188,7 @@ The DoB patterns include a negative lookbehind `(?<!/)` before the year and a ne
 
 When Microsoft Presidio or spaCy is installed, the scanner also runs NLP on code comments and string literal content to detect person names and locations — patterns no regex can reliably detect.
 
-**Presidio** (preferred): uses a trained ML model and returns a confidence score (0.0–1.0) for each detected entity. Findings from Presidio carry the actual model score as their confidence value. Detections below 0.70 are discarded.
+**Presidio** (preferred when installed): uses a trained ML model and returns a confidence score (0.0–1.0) for each detected entity. Findings from Presidio carry the actual model score as their confidence value. Detections below 0.70 are discarded. Without it, the scanner still runs its built-in regex layer and can use spaCy when installed.
 
 **spaCy** (fallback): uses the `en_core_web_sm` English model. Returns entity labels without individual scores; detections are assigned a fixed confidence of 0.65.
 
@@ -198,12 +204,12 @@ Neither backend sends data to an external service.
 
 ### Alternatives considered
 
-| Tool | Why not chosen |
-|---|---|
-| **AWS Macie** | Cloud-only, sends data externally, cost per GB |
-| **Google DLP API** | Cloud-only, sends data externally |
-| **Azure Purview** | Enterprise licensing, significant infrastructure overhead |
-| **PIIvot / pii-detector** | Narrower coverage, less actively maintained |
+| Tool                      | Why not chosen                                            |
+| ------------------------- | --------------------------------------------------------- |
+| **AWS Macie**             | Cloud-only, sends data externally, cost per GB            |
+| **Google DLP API**        | Cloud-only, sends data externally                         |
+| **Azure Purview**         | Enterprise licensing, significant infrastructure overhead |
+| **PIIvot / pii-detector** | Narrower coverage, less actively maintained               |
 
 ---
 
@@ -240,6 +246,7 @@ There are three ways to run SonarQube with PII Screener, each with different tra
 SonarQube runs as a Java application directly on your machine. The `setup --sonarqube` command downloads and configures everything automatically.
 
 **Benefits:**
+
 - Fastest scan times (no container overhead)
 - Uses the least memory
 - Can be started and stopped independently of Docker
@@ -247,16 +254,19 @@ SonarQube runs as a Java application directly on your machine. The `setup --sona
 - Works fully offline once installed
 
 **Drawbacks:**
+
 - Requires Java 17+
 - Does not start automatically on login — you must start it before scanning
 - Large download (~500 MB) on first setup
 
 **Setup:**
+
 ```powershell
 sensitive-scanner setup --sonarqube
 ```
 
 **Starting after a reboot:**
+
 ```powershell
 & "$env:USERPROFILE\.sensitive-scanner\sonarqube\bin\windows-x86-64\StartSonar.bat"
 ```
@@ -268,17 +278,20 @@ sensitive-scanner setup --sonarqube
 SonarQube runs in a Docker container. Useful if you already use Docker and do not want to install Java separately.
 
 **Benefits:**
+
 - No Java installation needed
 - Isolated from the host OS
 - Easy to tear down and recreate
 
 **Drawbacks:**
+
 - Requires Docker Desktop to be running
 - Slightly slower than native Java due to container overhead
 - Docker Desktop itself requires more memory than the native Java approach
 - On Windows, Docker Desktop starts automatically at login but takes 1–2 minutes itself to be ready
 
 **Setup:**
+
 ```powershell
 docker compose -f docker\docker-compose.yml up -d
 ```
@@ -292,11 +305,13 @@ The compose file configures the correct ports and volume mounts automatically.
 SonarCloud is the hosted SaaS version of SonarQube operated by Sonar. You connect to it with a token from [sonarcloud.io](https://sonarcloud.io).
 
 **Benefits:**
+
 - No local infrastructure at all
 - Always up to date with the latest rules
 - The analysis server is maintained for you
 
 **Drawbacks:**
+
 - **Source code is uploaded to Sonar's servers** — not suitable for projects with confidentiality requirements or air-gapped environments
 - Requires internet access for every scan
 - Free tier has public repositories only; private repositories require a paid plan
@@ -308,15 +323,15 @@ SonarCloud is the hosted SaaS version of SonarQube operated by Sonar. You connec
 
 #### Comparison summary
 
-| | Native Java | Docker | SonarCloud |
-|---|---|---|---|
-| Setup effort | Medium (Java install) | Low (Docker only) | Low (token only) |
-| Internet needed (ongoing) | No | No | Yes |
-| Source code stays local | Yes | Yes | **No** |
-| Scan speed | Fastest | Fast | Depends on queue |
-| Memory footprint | ~1.5 GB | ~2 GB | None locally |
-| Auto-start on login | No | Yes (with Docker Desktop) | N/A |
-| Air-gapped compatible | Yes | Yes (if images pre-pulled) | **No** |
+|                           | Native Java           | Docker                     | SonarCloud       |
+| ------------------------- | --------------------- | -------------------------- | ---------------- |
+| Setup effort              | Medium (Java install) | Low (Docker only)          | Low (token only) |
+| Internet needed (ongoing) | No                    | No                         | Yes              |
+| Source code stays local   | Yes                   | Yes                        | **No**           |
+| Scan speed                | Fastest               | Fast                       | Depends on queue |
+| Memory footprint          | ~1.5 GB               | ~2 GB                      | None locally     |
+| Auto-start on login       | No                    | Yes (with Docker Desktop)  | N/A              |
+| Air-gapped compatible     | Yes                   | Yes (if images pre-pulled) | **No**           |
 
 ### Why SonarQube was chosen
 
@@ -328,9 +343,9 @@ SonarCloud is the hosted SaaS version of SonarQube operated by Sonar. You connec
 
 ### Alternatives considered
 
-| Tool | Why not chosen |
-|---|---|
-| **CodeQL** | Extremely powerful but requires repository access via GitHub and a complete build environment; complex to run locally |
-| **Checkmarx** | Enterprise licensing costs; not self-hostable on free tier |
-| **Veracode** | Cloud-only; source code leaves the organisation |
-| **Fortify** | Expensive licensing; complex on-premise deployment |
+| Tool          | Why not chosen                                                                                                        |
+| ------------- | --------------------------------------------------------------------------------------------------------------------- |
+| **CodeQL**    | Extremely powerful but requires repository access via GitHub and a complete build environment; complex to run locally |
+| **Checkmarx** | Enterprise licensing costs; not self-hostable on free tier                                                            |
+| **Veracode**  | Cloud-only; source code leaves the organisation                                                                       |
+| **Fortify**   | Expensive licensing; complex on-premise deployment                                                                    |

@@ -97,7 +97,7 @@ class TestScanCodebase:
 
         with patch.object(server, "run_scan", _fake), patch.object(server, "render_markdown", return_value="MD"):
             await server.scan_codebase(str(tmp_path))
-        assert captured["scanners"] == ["gitleaks", "semgrep", "pii", "sonarqube"]
+        assert captured["scanners"] == ["gitleaks", "semgrep", "presidio", "sonarqube"]
 
 
 # --------------------------------------------------------------------------- #

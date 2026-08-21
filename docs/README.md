@@ -1,7 +1,7 @@
 # Sensitive Code Scanner — Setup & Troubleshooting Guide
 
-> **Reading this for the first time?**  Start at [Before you begin](#before-you-begin) and work
-> through each section in order.  Every command is explained before you are asked to run it.
+> **Reading this for the first time?** Start at [Before you begin](#before-you-begin) and work
+> through each section in order. Every command is explained before you are asked to run it.
 > Nothing is assumed.
 
 ---
@@ -28,7 +28,7 @@ health check during development.
 
 You can use it in two ways:
 
-- **As a command you type in a terminal** — the "CLI" (Command Line Interface).  Works anywhere,
+- **As a command you type in a terminal** — the "CLI" (Command Line Interface). Works anywhere,
   no VS Code required.
 - **As a chat assistant inside VS Code** — you describe what you want in plain English and the
   agent runs the scan for you.
@@ -37,13 +37,13 @@ You can use it in two ways:
 
 ## What does it find?
 
-| What | Examples |
-|---|---|
-| API keys & tokens | AWS, Azure, GitHub, Stripe, Slack keys, JWT tokens |
-| Passwords & credentials | Hardcoded passwords, database connection strings, private keys |
-| Personal data (structured) | Email addresses, phone numbers, credit card numbers, NI numbers, passports, dates of birth, SSNs, IBANs |
-| Personal data (unstructured) | People's names and locations written inside code comments or strings |
-| High-entropy secrets | Random-looking strings that are likely secret tokens |
+| What                         | Examples                                                                                                |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------- |
+| API keys & tokens            | AWS, Azure, GitHub, Stripe, Slack keys, JWT tokens                                                      |
+| Passwords & credentials      | Hardcoded passwords, database connection strings, private keys                                          |
+| Personal data (structured)   | Email addresses, phone numbers, credit card numbers, NI numbers, passports, dates of birth, SSNs, IBANs |
+| Personal data (unstructured) | People's names and locations written inside code comments or strings                                    |
+| High-entropy secrets         | Random-looking strings that are likely secret tokens                                                    |
 
 Every finding includes the file name, line number, a redacted preview of the value, and
 step-by-step instructions for fixing it.
@@ -54,15 +54,16 @@ step-by-step instructions for fixing it.
 
 The tool runs up to four different "scanners" at the same time and combines their results:
 
-| Scanner | What it does |
-|---|---|
-| **Gitleaks** | Finds secrets using pattern matching — fast and lightweight |
-| **Semgrep** | Reads code like a compiler does — catches things pattern matching misses |
-| **PII scanner** | Custom rules for personal data (regex + optional AI model) |
-| **SonarQube** | Enterprise-grade analysis — catches the most subtle issues |
+| Scanner         | What it does                                                               |
+| --------------- | -------------------------------------------------------------------------- |
+| **Gitleaks**    | Finds secrets using pattern matching — fast and lightweight                |
+| **Semgrep**     | Reads code like a compiler does — catches things pattern matching misses   |
+| **PII scanner** | Custom rules for personal data (regex plus optional Presidio or spaCy NER) |
+| **SonarQube**   | Enterprise-grade analysis — catches the most subtle issues                 |
 
-You do not need all four to get useful results.  Gitleaks + Semgrep + PII are the default and
-work without any extra infrastructure.  SonarQube is optional and adds deeper analysis.
+The CLI requests all four scanners by default and skips unavailable backends. Gitleaks,
+Semgrep, and the PII scanner provide the baseline tier without SonarQube infrastructure;
+SonarQube is optional and adds deeper analysis.
 
 ---
 
@@ -70,28 +71,28 @@ work without any extra infrastructure.  SonarQube is optional and adds deeper an
 
 ### What you need
 
-| Requirement | Why | Where to get it |
-|---|---|---|
-| **Windows 10 or 11 (64-bit)** | The tool runs on Windows, macOS, and Linux.  This guide uses Windows. | Already installed |
-| **Python 3.11 or newer** | The tool is written in Python | [python.org/downloads](https://www.python.org/downloads/) |
-| **uv** | Package manager | `pip install uv` |
-| **Git** (optional) | Only needed if you want to scan old commit history | [git-scm.com](https://git-scm.com/downloads) |
-| **Java 17 or newer** (optional) | Only needed for SonarQube — the most powerful scanner | [adoptium.net](https://adoptium.net/temurin/releases/) |
-| **Internet connection** | The first-time setup downloads tools automatically | — |
+| Requirement                     | Why                                                                  | Where to get it                                           |
+| ------------------------------- | -------------------------------------------------------------------- | --------------------------------------------------------- |
+| **Windows 10 or 11 (64-bit)**   | The tool runs on Windows, macOS, and Linux. This guide uses Windows. | Already installed                                         |
+| **Python 3.11 or newer**        | The tool is written in Python                                        | [python.org/downloads](https://www.python.org/downloads/) |
+| **uv**                          | Package manager                                                      | `pip install uv`                                          |
+| **Git** (optional)              | Only needed if you want to scan old commit history                   | [git-scm.com](https://git-scm.com/downloads)              |
+| **Java 17 or newer** (optional) | Only needed for SonarQube — the most powerful scanner                | [adoptium.net](https://adoptium.net/temurin/releases/)    |
+| **Internet connection**         | The first-time setup downloads tools automatically                   | —                                                         |
 
-> **Not sure if you have Python?**  Skip ahead to [Step 1](#step-1--install-python) to check.
+> **Not sure if you have Python?** Skip ahead to [Step 1](#step-1--install-python) to check.
 
 ---
 
 ## Installation
 
-Follow these steps in order.  Each step builds on the previous one.
+Follow these steps in order. Each step builds on the previous one.
 
 ---
 
 ### Step 1 — Install Python
 
-**What this does:** Python is the programming language the tool is written in.  Without it,
+**What this does:** Python is the programming language the tool is written in. Without it,
 nothing will run.
 
 1. Open a browser and go to **https://www.python.org/downloads/**
@@ -99,7 +100,7 @@ nothing will run.
    matter as long as it's 3.11 or higher).
 3. Run the installer.
 4. **Important:** On the first screen of the installer, tick the box that says
-   **"Add Python to PATH"** before clicking Install Now.  If you miss this, Python commands
+   **"Add Python to PATH"** before clicking Install Now. If you miss this, Python commands
    won't work in the terminal.
 5. Click **Install Now** and wait for it to finish.
 6. Click **Close**.
@@ -111,7 +112,7 @@ type the following, and press Enter:
 python --version
 ```
 
-You should see something like `Python 3.14.0`.  Any version 3.11 or higher is fine.
+You should see something like `Python 3.14.0`. Any version 3.11 or higher is fine.
 
 > **Seeing a Microsoft Store window instead?** This means Python is not on your PATH yet.
 > Run this command in PowerShell (copy and paste the whole thing):
@@ -124,7 +125,7 @@ You should see something like `Python 3.14.0`.  Any version 3.11 or higher is fi
 > )
 > ```
 >
-> Then **close PowerShell completely** and open a new one.  Try `python --version` again.
+> Then **close PowerShell completely** and open a new one. Try `python --version` again.
 > Replace `3.14` in the path above with whatever version you installed if it's different.
 
 ---
@@ -178,7 +179,7 @@ uv sync
 sensitive-scanner --help
 ```
 
-You should see a list of available commands.  If you see an error, see the
+You should see a list of available commands. If you see an error, see the
 [Troubleshooting](#troubleshooting) section.
 
 ---
@@ -186,7 +187,7 @@ You should see a list of available commands.  If you see an error, see the
 ### Step 5 — Run the setup wizard
 
 **What this does:** Checks your installation, automatically downloads Gitleaks, installs
-Semgrep, and reports what is ready.  This is the fastest way to get the basic scanner working.
+Semgrep, and reports what is ready. This is the fastest way to get the basic scanner working.
 
 ```powershell
 sensitive-scanner setup
@@ -203,10 +204,10 @@ You will see a progress spinner for each component, then a summary table like th
   SonarQube    –        optional — add --sonarqube to auto-download
 ```
 
-A green tick (✅) means that component is ready.  A dash (–) means it's optional and not
+A green tick (✅) means that component is ready. A dash (–) means it's optional and not
 installed — that is fine for now.
 
-**That's it for the basic setup.**  You can now scan code.  Continue reading for how to
+**That's it for the basic setup.** You can now scan code. Continue reading for how to
 run your first scan, or keep going to set up the optional components.
 
 ---
@@ -214,18 +215,18 @@ run your first scan, or keep going to set up the optional components.
 ### Step 6 — (Optional) Add SonarQube for deeper analysis
 
 **What this does:** Downloads and configures SonarQube Community Edition — a professional
-code analysis server that runs locally on your machine.  It catches a broader range of issues
-than the basic scanners.  This step downloads about 550 MB in total.
+code analysis server that runs locally on your machine. It catches a broader range of issues
+than the basic scanners. This step downloads about 550 MB in total.
 
 **You will need Java 17+ installed first** (see below).
 
 #### 6a — Install Java
 
 1. Go to **https://adoptium.net/temurin/releases/**
-2. Under "Version", select **21 (LTS)**.  Under "OS", select **Windows**.  Under "Architecture",
-   select **x64**.  Under "Package Type", select **JDK**.
+2. Under "Version", select **21 (LTS)**. Under "OS", select **Windows**. Under "Architecture",
+   select **x64**. Under "Package Type", select **JDK**.
 3. Download the `.msi` file (the Windows installer).
-4. Run it.  On the "Custom Setup" screen, make sure **"Add to PATH"** and **"Set JAVA_HOME
+4. Run it. On the "Custom Setup" screen, make sure **"Add to PATH"** and **"Set JAVA_HOME
    variable"** are both ticked.
 5. Click through to finish.
 6. Open a **new** PowerShell window and verify:
@@ -234,8 +235,7 @@ than the basic scanners.  This step downloads about 550 MB in total.
 java -version
 ```
 
-You should see a line containing `openjdk version "21.x.x"` or similar.  Any version 17 or
-higher works.
+You should see a line containing `openjdk version "17.x.x"` or newer.
 
 #### 6b — Auto-download and configure SonarQube
 
@@ -246,6 +246,7 @@ sensitive-scanner setup --sonarqube
 ```
 
 This will:
+
 1. Check Java is available.
 2. Download **sonar-scanner-cli** (the component that sends code to SonarQube) — ~50 MB.
 3. Download **SonarQube Community Edition** (the analysis server) — ~500 MB.
@@ -274,8 +275,8 @@ restart your computer.
 
 Replace `squ_abc123def456...` with the actual token shown by the setup command.
 
-> **Didn't get a token automatically?**  This happens when SonarQube's default admin password
-> was already changed on a previous install.  See
+> **Didn't get a token automatically?** This happens when SonarQube's default admin password
+> was already changed on a previous install. See
 > [Generating a token manually](#generating-a-sonarqube-token-manually).
 
 ---
@@ -308,7 +309,7 @@ Or for a more detailed view of active scanner tiers:
 sensitive-scanner status
 ```
 
-```
+````
 
 ---
 
@@ -318,9 +319,9 @@ Once setup is complete, open a PowerShell window and run:
 
 ```powershell
 sensitive-scanner scan C:\path\to\your\project
-```
+````
 
-Replace `C:\path\to\your\project` with the actual folder you want to scan.  For example:
+Replace `C:\path\to\your\project` with the actual folder you want to scan. For example:
 
 ```powershell
 sensitive-scanner scan C:\Github\MyProject
@@ -347,25 +348,25 @@ The HTML report is fully self-contained — you can email it or attach it to a t
 
 Each finding in the report contains:
 
-| Column | What it means |
-|---|---|
-| **Severity** | How serious the issue is: Critical → High → Medium → Low |
-| **Category** | The type of issue, e.g. `pii_email`, `aws_access_key`, `hardcoded_password` |
-| **File** | The file path relative to the folder you scanned |
-| **Line** | The line number in that file |
-| **Match** | A redacted preview — e.g. `john***` — not the full value |
-| **Rule** | The rule ID that triggered this finding — useful for suppressing false positives |
-| **Scanners** | Which scanner(s) caught this (multiple means higher confidence) |
-| **Fix** | Step-by-step remediation instructions |
+| Column       | What it means                                                                    |
+| ------------ | -------------------------------------------------------------------------------- |
+| **Severity** | How serious the issue is: Critical → High → Medium → Low                         |
+| **Category** | The type of issue, e.g. `pii_email`, `aws_access_key`, `hardcoded_password`      |
+| **File**     | The file path relative to the folder you scanned                                 |
+| **Line**     | The line number in that file                                                     |
+| **Match**    | A redacted preview — e.g. `john***` — not the full value                         |
+| **Rule**     | The rule ID that triggered this finding — useful for suppressing false positives |
+| **Scanners** | Which scanner(s) caught this (multiple means higher confidence)                  |
+| **Fix**      | Step-by-step remediation instructions                                            |
 
 ### Severity levels
 
-| Severity | Meaning | What to do |
-|---|---|---|
-| **Critical** | Exposed secret or PII that is almost certainly real | Fix immediately |
-| **High** | Strong likelihood of a real issue | Fix before sharing the code |
-| **Medium** | Could be an issue — review the context | Investigate and fix or suppress |
-| **Low** | Weak signal — probably fine but worth a look | Review at your convenience |
+| Severity     | Meaning                                             | What to do                      |
+| ------------ | --------------------------------------------------- | ------------------------------- |
+| **Critical** | Exposed secret or PII that is almost certainly real | Fix immediately                 |
+| **High**     | Strong likelihood of a real issue                   | Fix before sharing the code     |
+| **Medium**   | Could be an issue — review the context              | Investigate and fix or suppress |
+| **Low**      | Weak signal — probably fine but worth a look        | Review at your convenience      |
 
 ### "This is a false positive — how do I stop it appearing?"
 
@@ -380,7 +381,7 @@ sensitive-scanner scan C:\Github\MyProject --suppress "pii_email"
 
 **Permanent suppression** (suppressed on every future scan):
 
-Open the file `C:\Github\lap-pii-screener\config\suppress.txt` in any text editor and add the Rule
+Open the file `C:\Github\lap-pii-screener\src\config\suppress.txt` in any text editor and add the Rule
 ID on a new line:
 
 ```
@@ -407,7 +408,7 @@ test_email = "user@example.com"  # noscan: pii_email
 ## Setting up the VS Code chat agent
 
 This lets you talk to the scanner in plain English inside VS Code Copilot Chat — for example:
-*"scan the code at C:\Github\MyProject and show me the critical findings"*.
+_"scan the code at C:\Github\MyProject and show me the critical findings"_.
 
 ### Step 1 — Find your Python path
 
@@ -428,8 +429,8 @@ Copy this value — you will need it in the next step.
 2. Go to **File → Preferences → Settings** (or press `Ctrl+,`).
 3. In the search box at the top, type `mcp`.
 4. Click **"Edit in settings.json"**.
-5. You will see a file open.  Find the closing `}` at the very end of the file.
-   Before it, add the following block.  If there is already an `"mcp"` key, merge the
+5. You will see a file open. Find the closing `}` at the very end of the file.
+   Before it, add the following block. If there is already an `"mcp"` key, merge the
    `"servers"` section into it instead of adding a second `"mcp"` block.
 
 ```json
@@ -437,7 +438,7 @@ Copy this value — you will need it in the next step.
   "servers": {
     "pii-screener": {
       "command": "C:\\Users\\YourName\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe",
-      "args": ["C:\\Github\\lap-pii-screener\\server.py"],
+      "args": ["C:\\Github\\lap-pii-screener\\src\\server.py"],
       "env": {
         "SONAR_HOST_URL": "http://localhost:9100",
         "SONAR_TOKEN": ""
@@ -468,14 +469,14 @@ The agent will run the scan and display a formatted summary in the chat.
 
 ### What can you ask the agent?
 
-| Example prompt | What happens |
-|---|---|
-| `scan C:\Github\MyProject` | Runs a full scan and shows a summary |
-| `list all high and critical findings` | Filters the last scan without re-scanning |
-| `show findings in the auth folder` | Filters by file path |
-| `get the report as html` | Returns the last scan report as HTML |
-| `get remediation for finding abc123` | Shows the fix steps for a specific finding |
-| `check scanner status` | Reports which scanners are active |
+| Example prompt                        | What happens                               |
+| ------------------------------------- | ------------------------------------------ |
+| `scan C:\Github\MyProject`            | Runs a full scan and shows a summary       |
+| `list all high and critical findings` | Filters the last scan without re-scanning  |
+| `show findings in the auth folder`    | Filters by file path                       |
+| `get the report as html`              | Returns the last scan report as HTML       |
+| `get remediation for finding abc123`  | Shows the fix steps for a specific finding |
+| `check scanner status`                | Reports which scanners are active          |
 
 ---
 
@@ -486,7 +487,7 @@ The agent will run the scan and display a formatted summary in the chat.
 ```powershell
 sensitive-scanner setup                  # installs Gitleaks + Semgrep
 sensitive-scanner setup --spacy          # also installs spaCy NLP model
-sensitive-scanner setup --sonarqube      # also downloads SonarQube CE (~550 MB)
+sensitive-scanner setup --sonarqube      # also downloads SonarQube CE (~500 MB)
 sensitive-scanner setup --all            # installs everything
 sensitive-scanner setup --check          # reports status without installing anything
 ```
@@ -518,7 +519,7 @@ sensitive-scanner scan C:\Github\MyProject --format markdown --output report.md
 sensitive-scanner scan C:\Github\MyProject --format json --output findings.json
 
 # Run only specific scanners (faster)
-sensitive-scanner scan C:\Github\MyProject --scanners gitleaks,pii
+sensitive-scanner scan C:\Github\MyProject --scanners gitleaks,presidio
 
 # Include git history — catches secrets in old commits
 sensitive-scanner scan C:\Github\MyProject --history
@@ -532,20 +533,20 @@ sensitive-scanner scan C:\Github\MyProject --fail-on critical
 
 **All options**
 
-| Option | Short | Default | Description |
-|---|---|---|---|
-| `--format` | `-f` | `console` | Output format: `console`, `markdown`, `html`, `json` |
-| `--output` | `-o` | terminal | File to write the report to |
-| `--project` | `-p` | folder name | Project name shown in the report |
-| `--scanners` | `-s` | all | Comma-separated: `gitleaks`, `semgrep`, `pii`, `sonarqube` |
-| `--history` | | off | Scan git commit history as well as working files |
-| `--show-secrets` | | off | Show full matched values instead of redacting them |
-| `--exclude` | `-e` | | Extra folder names to skip |
-| `--suppress` | | | Comma-separated rule IDs to hide from results for this run |
-| `--fail-on` | | none | Exit with code 2 if a finding at or above this severity exists |
-| `--config` | `-c` | auto-detect | Path to a YAML config file |
-| `--per-file` | | off | Write one report file per scanned source file |
-| `--output-dir` | | `scan-reports/` | Directory for per-file reports (implies `--per-file`) |
+| Option           | Short | Default         | Description                                                     |
+| ---------------- | ----- | --------------- | --------------------------------------------------------------- |
+| `--format`       | `-f`  | `console`       | Output format: `console`, `markdown`, `html`, `json`            |
+| `--output`       | `-o`  | terminal        | File to write the report to                                     |
+| `--project`      | `-p`  | folder name     | Project name shown in the report                                |
+| `--scanners`     | `-s`  | all             | Comma-separated: `gitleaks`, `semgrep`, `presidio`, `sonarqube` |
+| `--history`      |       | off             | Scan git commit history as well as working files                |
+| `--show-secrets` |       | off             | Show full matched values instead of redacting them              |
+| `--exclude`      | `-e`  |                 | Extra folder names to skip                                      |
+| `--suppress`     |       |                 | Comma-separated rule IDs to hide from results for this run      |
+| `--fail-on`      |       | none            | Exit with code 2 if a finding at or above this severity exists  |
+| `--config`       | `-c`  | auto-detect     | Path to a YAML config file                                      |
+| `--per-file`     |       | off             | Write one report file per scanned source file                   |
+| `--output-dir`   |       | `scan-reports/` | Directory for per-file reports (implies `--per-file`)           |
 
 **Folders the scanner skips automatically**
 
@@ -581,13 +582,13 @@ sensitive-scanner report --format markdown
 If `sensitive-scanner setup --sonarqube` could not create a token automatically (because the
 default admin password was already changed), do this:
 
-1. Make sure SonarQube is running.  If it is not, start it:
+1. Make sure SonarQube is running. If it is not, start it:
 
 ```powershell
 & "C:\Users\YourName\.sensitive-scanner\sonarqube\bin\windows-x86-64\StartSonar.bat"
 ```
 
-Wait about 2 minutes.  A CMD window will appear — leave it open.
+Wait about 2 minutes. A CMD window will appear — leave it open.
 
 2. Open a browser and go to **http://localhost:9100**
 3. Log in with your admin username and password.
@@ -595,7 +596,7 @@ Wait about 2 minutes.  A CMD window will appear — leave it open.
 5. Click the **Security** tab.
 6. Under "Generate Tokens", enter a name (e.g. `scanner`), leave the type as **User Token**,
    and click **Generate**.
-7. A token string appears (starts with `squ_`).  **Copy it immediately** — it will not be
+7. A token string appears (starts with `squ_`). **Copy it immediately** — it will not be
    shown again.
 8. Save it permanently:
 
@@ -613,14 +614,14 @@ Replace `squ_your_token_here` with the actual token.
 
 ## Starting SonarQube after a restart
 
-SonarQube does not start automatically when you reboot your computer.  Whenever you want to
+SonarQube does not start automatically when you reboot your computer. Whenever you want to
 use SonarQube-level scanning, start it first:
 
 ```powershell
 & "C:\Users\YourName\.sensitive-scanner\sonarqube\bin\windows-x86-64\StartSonar.bat"
 ```
 
-Wait about 60–90 seconds.  You will know it is ready when you can open
+Wait about 60–90 seconds. You will know it is ready when you can open
 **http://localhost:9100** in a browser and see the login page (or the dashboard if you are
 already logged in).
 
@@ -651,8 +652,8 @@ If that still does not work, the `uv`-managed virtual environment's `Scripts` fo
 
 **Symptom:** Typing `python` opens the Microsoft Store app.
 
-**Fix:** Python is not on your PATH.  Run the PATH fix command from
-[Step 1](#step-1--install-python), replacing `3.14` with your installed version.  Then
+**Fix:** Python is not on your PATH. Run the PATH fix command from
+[Step 1](#step-1--install-python), replacing `3.14` with your installed version. Then
 close and reopen PowerShell.
 
 ---
@@ -722,7 +723,7 @@ If this gives an error, go back to [Step 6a](#6a--install-java).
 2. **Did the port get patched?**
 
 Open `C:\Users\YourName\.sensitive-scanner\sonarqube\conf\sonar.properties` in Notepad.
-Look for a line that says `sonar.web.port=9100`.  If it's not there, the patch did not apply.
+Look for a line that says `sonar.web.port=9100`. If it's not there, the patch did not apply.
 Add the line manually, then try starting SonarQube again.
 
 3. **Is something else already on port 9100?**
@@ -743,14 +744,14 @@ Get-Content "$env:USERPROFILE\.sensitive-scanner\sonarqube\logs\es.log" -Tail 30
 
 Common errors and fixes:
 
-| Log message | Fix |
-|---|---|
-| `max virtual memory areas vm.max_map_count [65530] is too low` | Windows Subsystem for Linux (WSL) setting — not normally an issue on native Windows |
-| `Native controller process has stopped` | Java version issue — ensure Java 17+ is installed and on PATH |
-| `bootstrap.system_call_filter` error | Remove any `bootstrap.system_call_filter` line from `sonar.properties` — this setting was removed in newer versions |
-| `Address already in use: 9100` | Something else is using port 9100 — see step 3 above |
+| Log message                                                    | Fix                                                                                                                 |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `max virtual memory areas vm.max_map_count [65530] is too low` | Windows Subsystem for Linux (WSL) setting — not normally an issue on native Windows                                 |
+| `Native controller process has stopped`                        | Java version issue — ensure Java 17+ is installed and on PATH                                                       |
+| `bootstrap.system_call_filter` error                           | Remove any `bootstrap.system_call_filter` line from `sonar.properties` — this setting was removed in newer versions |
+| `Address already in use: 9100`                                 | Something else is using port 9100 — see step 3 above                                                                |
 
-5. **Not enough memory:** SonarQube needs at least 3 GB of free RAM.  Close other applications
+5. **Not enough memory:** SonarQube needs at least 3 GB of free RAM. Close other applications
    and try again.
 
 ---
@@ -776,7 +777,7 @@ After setting it, open a **new** PowerShell window (environment variables are re
 echo $env:SONAR_HOST_URL
 ```
 
-It should be `http://localhost:9100`.  If it is missing or wrong:
+It should be `http://localhost:9100`. If it is missing or wrong:
 
 ```powershell
 [Environment]::SetEnvironmentVariable("SONAR_HOST_URL", "http://localhost:9100", "User")
@@ -793,25 +794,25 @@ tools listed in Agent mode.
 
 **Checks:**
 
-1. Did you restart VS Code after editing `settings.json`?  VS Code reads MCP configuration
+1. Did you restart VS Code after editing `settings.json`? VS Code reads MCP configuration
    at startup — a full restart (not just reloading the window) is required.
 
-2. Is the Python path in `settings.json` correct?  It must be the **full absolute path**,
-   not just `python`.  Find yours with:
+2. Is the Python path in `settings.json` correct? It must be the **full absolute path**,
+   not just `python`. Find yours with:
 
 ```powershell
 python -c "import sys; print(sys.executable)"
 ```
 
-3. Is the `args` path in `settings.json` pointing to the correct `server.py`?  Use the
-   full absolute path to `C:\Github\lap-pii-screener\server.py` (or wherever you cloned the
+3. Is the `args` path in `settings.json` pointing to the correct `server.py`? Use the
+   full absolute path to `C:\Github\lap-pii-screener\src\server.py` (or wherever you cloned the
    repo).
 
 4. Check the VS Code Output panel: press `Ctrl+Shift+U`, then in the dropdown at the top
-   right of the output pane, select **MCP**.  Any connection errors will appear there.
+   right of the output pane, select **MCP**. Any connection errors will appear there.
 
 5. If you see a Python import error in the MCP output, the packages are probably not
-   installed in the Python environment VS Code is using.  Run:
+   installed in the Python environment VS Code is using. Run:
 
 ```powershell
 "C:\path\to\your\python.exe" -m pip install uv
@@ -827,9 +828,9 @@ Using the exact Python path from step 2 above.
 **Symptom:** Gitleaks runs but returns no findings and exits with a non-zero code, or you
 see a "panic" message.
 
-**Fix:** This usually means `config/gitleaks.toml` contains a regex the Gitleaks engine
+**Fix:** This usually means `src/config/gitleaks.toml` contains a regex the Gitleaks engine
 cannot handle (it uses the RE2 engine which does not support lookahead/lookbehind assertions
-like `(?!...)` or `(?=...)`).  Edit `config/gitleaks.toml` and remove any such patterns.
+like `(?!...)` or `(?=...)`). Edit `src/config/gitleaks.toml` and remove any such patterns.
 
 ---
 
@@ -838,7 +839,7 @@ like `(?!...)` or `(?=...)`).  Edit `config/gitleaks.toml` and remove any such p
 **Symptom:** You added `# noscan` to a line but the finding still shows up.
 
 **Fix:** The comment must be on the **same line** as the value, not on the line above or
-below.  Example:
+below. Example:
 
 ```python
 # This does NOT suppress the next line:
@@ -855,23 +856,24 @@ password = "abc123"  # noscan
 
 **Symptom:** Running `sensitive-scanner report` gives "No cached report found."
 
-**Fix:** The `report` command re-exports the results from the last `scan` run.  You must run
-`sensitive-scanner scan ...` at least once first.  The cache is stored per-session, so if you
-opened a new terminal it will be empty.
+**Fix:** The `report` command re-exports the results from the last `scan` run. You must run
+`sensitive-scanner scan ...` at least once first. The cache is stored at
+`~/.sensitive-scanner/last_report.json` and is shared across terminal sessions for the same
+user until the next scan replaces it.
 
 ---
 
 ## Configuration file reference
 
 You can place a `sensitive-scanner.yaml` file in the folder you are scanning to set default
-options for that project.  CLI flags always override the config file.
+options for that project. CLI flags always override the config file.
 
 ```yaml
 # sensitive-scanner.yaml
 # All settings are optional — comment out or remove what you don't need.
 
 # Which scanners to run (default: all available)
-# scanners: [gitleaks, semgrep, pii, sonarqube]
+# scanners: [gitleaks, semgrep, presidio, sonarqube]
 
 # Default output format (default: console)
 # format: console
@@ -897,7 +899,7 @@ options for that project.  CLI flags always override the config file.
 # suppress_by_scanner:
 #   sonarqube:
 #     - secrets:S6706
-#   pii:
+#   presidio:
 #     - pii_phone_us
 
 # Folders and files to exclude
@@ -922,7 +924,7 @@ Add the following block (merge into the top-level JSON object):
   "servers": {
     "pii-screener": {
       "command": "C:\\Users\\<you>\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe",
-      "args": ["C:\\Github\\lap-pii-screener\\server.py"],
+      "args": ["C:\\Github\\lap-pii-screener\\src\\server.py"],
       "env": {
         "SONAR_HOST_URL": "http://localhost:9100",
         "SONAR_TOKEN": ""

@@ -80,7 +80,7 @@ async def scan_codebase(
 
     Args:
         path: Absolute path to the directory or git repository to scan.
-        scanners: Subset of scanners to use — ["gitleaks", "semgrep", "pii", "sonarqube"].
+        scanners: Subset of scanners to use — ["gitleaks", "semgrep", "presidio", "sonarqube"].
                   Omit to use all available scanners.
         project_name: Human-readable name for the project (used in reports).
         include_git_history: Scan the full git commit history for secrets (slower).
@@ -94,7 +94,7 @@ async def scan_codebase(
     except ValueError as exc:
         return f"**Error:** {exc}"
 
-    requested = scanners or ["gitleaks", "semgrep", "pii", "sonarqube"]
+    requested = scanners or ["gitleaks", "semgrep", "presidio", "sonarqube"]
 
     config = ScanConfig(
         path=str(scan_path),

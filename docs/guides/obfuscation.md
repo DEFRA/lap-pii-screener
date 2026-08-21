@@ -3,7 +3,9 @@
 The obfuscation feature lets you replace sensitive values directly in your source files — turning a real API key or person name into a safe placeholder — with interactive review, dry-run preview, and full rollback.
 
 **Page contents**
+
 - [Overview](#overview)
+- [Replacement strategies](#replacement-strategies)
 - [Session files](#session-files)
 - [The review TUI](#the-review-tui)
 - [Workflow: full scan and review](#workflow-full-scan-and-review)
@@ -28,29 +30,47 @@ The obfuscation process has three stages:
 
 3. **Apply** — approved replacements are written to the source files. Backups are created first. If anything goes wrong, rollback restores the originals.
 
+## Replacement strategies
+
+Redaction is the default and replaces values with category-specific `[REDACTED_*]` tokens. To generate realistic replacements instead, install the optional Faker dependency and select the strategy explicitly:
+
+```powershell
+uv pip install faker
+sensitive-scanner obfuscate C:\Github\MyProject --obfuscation-strategy faker
+```
+
+The `faker` strategy still opens the review UI unless findings are covered by
+`--auto-approve`. The `all` strategy also opens the review UI and starts each finding with
+redaction, allowing you to press `f` to choose Faker for individual findings. Neither
+strategy automatically approves every finding.
+
+The `all` strategy keeps the interactive review and starts each finding with redaction. Press `f` during review to toggle the current finding between redaction and Faker. Faker output is plausible and type-shaped, but it is not guaranteed to preserve the original value's exact length, locale, or validation semantics.
+
 ---
 
 ## Session files
 
 When `obfuscate` runs, it creates a session file (default: `pii-review-session.json` in the scan target directory). This JSON file records every finding and your decision for it:
 
-| Field | What it stores |
-|---|---|
-| `finding_id` | The ID of the original scan finding |
-| `file` | File path relative to the scan root |
-| `line` | Line number |
-| `rule_id` | The rule that triggered the finding |
-| `category` | Finding category |
-| `severity` | Finding severity |
-| `scanners` | Which scanners detected this |
-| `match_display` | Redacted preview shown in the report |
-| `raw_match` | The actual value to be replaced (hidden by default in reports) |
-| `replacement` | The placeholder value to substitute |
-| `decision` | `approved`, `skipped`, `manual`, or `pending` |
-| `skip_reason` | Optional explanation when skipped |
-| `confidence` | Detection confidence score |
+| Field                  | What it stores                                                 |
+| ---------------------- | -------------------------------------------------------------- |
+| `finding_id`           | The ID of the original scan finding                            |
+| `file`                 | File path relative to the scan root                            |
+| `line`                 | Line number                                                    |
+| `rule_id`              | The rule that triggered the finding                            |
+| `category`             | Finding category                                               |
+| `severity`             | Finding severity                                               |
+| `scanners`             | Which scanners detected this                                   |
+| `match_display`        | Redacted preview shown in the report                           |
+| `raw_match`            | The actual value to be replaced (hidden by default in reports) |
+| `replacement`          | The placeholder value to substitute                            |
+| `obfuscation_strategy` | `redaction` or `faker` used to generate the replacement        |
+| `decision`             | `approved`, `skipped`, `manual`, or `pending`                  |
+| `skip_reason`          | Optional explanation when skipped                              |
+| `confidence`           | Detection confidence score                                     |
 
 **Why save to a file?** Large codebases may have dozens or hundreds of findings. The session file lets you:
+
 - Stop mid-review and continue later
 - Edit decisions after the fact with `sensitive-scanner edit`
 - Apply the same set of replacements across multiple clones or branches
@@ -83,14 +103,15 @@ The TUI presents findings one at a time in a formatted panel. Each panel shows:
 
 At the bottom of the panel, the available keys are shown:
 
-| Key | Action |
-|---|---|
-| `a` | **Approve** — accept the default replacement and move on |
-| `e` | **Edit + approve** — type a custom replacement text before approving |
-| `s` | **Skip** — do not obfuscate this finding; you are prompted for an optional reason |
-| `A` | **Approve all** — approve every remaining finding in the same category at once |
+| Key | Action                                                                                                 |
+| --- | ------------------------------------------------------------------------------------------------------ |
+| `a` | **Approve** — accept the default replacement and move on                                               |
+| `e` | **Edit + approve** — type a custom replacement text before approving                                   |
+| `f` | **Toggle strategy** — switch the current finding between redaction and Faker                           |
+| `s` | **Skip** — do not obfuscate this finding; you are prompted for an optional reason                      |
+| `A` | **Approve all** — approve every remaining finding in the same category at once                         |
 | `S` | **Skip all** — skip every remaining finding in the same category; you are prompted for a shared reason |
-| `q` | **Quit** — save the session and exit (findings not yet reviewed remain `pending`) |
+| `q` | **Quit** — save the session and exit (findings not yet reviewed remain `pending`)                      |
 
 When you press `s` or `S`, a reason prompt appears. Enter any explanation (or leave blank). Single-character inputs matching a key (`a`, `s`, `q`, `e`) are cleared automatically to prevent accidentally pressing a key from registering as the reason.
 
@@ -106,6 +127,7 @@ sensitive-scanner obfuscate C:\Github\MyProject
 ```
 
 This runs the full workflow:
+
 1. Scans the directory
 2. Opens the TUI review
 3. After you finish reviewing, prompts whether to apply
@@ -145,6 +167,7 @@ sensitive-scanner obfuscate C:\Github\MyProject --apply-session C:\tmp\review-se
 ```
 
 This is useful when:
+
 - You want to apply the same session to a freshly checked-out copy of the repository
 - You stopped mid-review and want to apply only what you have decided so far
 - You edited the session with `sensitive-scanner edit` and want to re-apply
@@ -199,12 +222,12 @@ sensitive-scanner obfuscate C:\Github\MyProject --apply --report obfuscation-rep
 
 The report adds an **Obfuscation** column to the standard finding table:
 
-| Decision | What it means |
-|---|---|
-| `approved` | The replacement was applied (or would be applied in dry-run) |
-| `skipped` | You chose to leave this finding as-is; skip reason shown if provided |
-| `manual` | Cannot be auto-replaced — requires manual action |
-| `pending` | Review was not completed for this finding |
+| Decision   | What it means                                                        |
+| ---------- | -------------------------------------------------------------------- |
+| `approved` | The replacement was applied (or would be applied in dry-run)         |
+| `skipped`  | You chose to leave this finding as-is; skip reason shown if provided |
+| `manual`   | Cannot be auto-replaced — requires manual action                     |
+| `pending`  | Review was not completed for this finding                            |
 
 To include the full matched values in the report (instead of redacted):
 
@@ -217,7 +240,7 @@ sensitive-scanner obfuscate C:\Github\MyProject --apply --report report.html --s
 You can also attach a session to any standard scan report using the `--session` flag on the `scan` command:
 
 ```powershell
-sensitive-scanner scan C:\Github\MyProject --format html --output report.html \
+sensitive-scanner scan C:\Github\MyProject --format html --output report.html `
   --session C:\Github\MyProject\pii-review-session.json
 ```
 
@@ -241,6 +264,7 @@ sensitive-scanner rollback C:\Github\MyProject --backup-dir .pii-backups\2026060
 This copies the backed-up originals back over the modified files. All other files are left untouched.
 
 **Important notes:**
+
 - Rollback restores the files exactly as they were before the obfuscation was applied
 - It does not affect the session file — your review decisions are preserved
 - You can re-apply the session after making manual fixes, or delete approvals you no longer want with `sensitive-scanner edit`
@@ -346,6 +370,8 @@ Options:
       --dry-run             Preview replacements without writing files
       --auto-approve TEXT   Auto-approve findings at or above: critical|high|medium|low
       --show-secrets        Show full matched values in the TUI (not redacted)
+      --obfuscation-strategy TEXT
+                redaction (default), faker, or all (interactive choice)
 
 sensitive-scanner rollback <path> [OPTIONS]
 

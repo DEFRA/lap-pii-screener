@@ -12,8 +12,8 @@ Before running any commands, install these two things manually:
 1. **Python 3.11+** → https://www.python.org/downloads/  
    ⚠ On the installer's first screen, tick **"Add Python to PATH"** before clicking Install Now.
 
-2. **Java 21** → https://adoptium.net/temurin/releases/  
-   Download the Windows x64 `.msi`. On the "Custom Setup" screen, tick **"Add to PATH"** and **"Set JAVA_HOME variable"**.
+2. **Java 17 or newer** → https://adoptium.net/temurin/releases/  
+   Download a Windows x64 JDK. On the "Custom Setup" screen, tick **"Add to PATH"** and **"Set JAVA_HOME variable"**.
 
 Open a **new** PowerShell window after both installs. Then continue below.
 
@@ -35,7 +35,7 @@ pip install uv
 uv sync
 ```
 
-`uv sync` reads `pyproject.toml` and `uv.lock` to install all dependencies at their exact pinned versions, then registers the `sensitive-scanner` command automatically.
+`uv sync` reads `pyproject.toml` and `uv.lock` to install the base dependencies at their exact pinned versions, then registers the `sensitive-scanner` command automatically. Optional document extractors are installed separately with `uv sync --extra docs`.
 
 ---
 
@@ -45,9 +45,10 @@ uv sync
 sensitive-scanner setup --all
 ```
 
-This will download Gitleaks, install Semgrep, install the spaCy NLP model, download
-SonarQube (~500 MB), start it, and save `SONAR_TOKEN` and `SONAR_HOST_URL` to your
-environment automatically.
+This downloads Gitleaks, installs Semgrep and spaCy, downloads SonarQube (~500 MB), and
+starts it. The setup command saves `SONAR_TOKEN` and `SONAR_HOST_URL` to the user
+environment when token creation succeeds; open a new terminal before scanning so the
+variables are available.
 
 > ⏳ The first run takes 3–5 minutes while SonarQube starts for the first time.
 
@@ -66,7 +67,7 @@ Close this PowerShell window and open a fresh one.
 sensitive-scanner scan C:\path\to\your\project
 ```
 
-Results print to the terminal with colour coding.  To save an HTML report instead:
+Results print to the terminal with colour coding. To save an HTML report instead:
 
 ```powershell
 sensitive-scanner scan C:\path\to\your\project --format html --output report.html
@@ -86,7 +87,7 @@ You should see `Active tier: 2` which means SonarQube is running and being used.
 
 ## Starting SonarQube after a reboot
 
-SonarQube does not start automatically on login.  Run this when you want it:
+SonarQube does not start automatically on login. Run this when you want it:
 
 ```powershell
 & "$env:USERPROFILE\.sensitive-scanner\sonarqube\bin\windows-x86-64\StartSonar.bat"

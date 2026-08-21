@@ -3,6 +3,7 @@
 PII Screener can produce output in four formats. Each suits a different audience and purpose. This page explains what each format contains, when to use it, and the options available.
 
 **Page contents**
+
 - [Console](#console)
 - [HTML](#html)
 - [Markdown](#markdown)
@@ -35,11 +36,13 @@ Scan complete — Total: 3  Critical: 1  High: 1  Medium: 1  Low: 0
 ```
 
 **Best for:**
+
 - Interactive use during development
 - Quick checks before committing or sharing code
 - Piping to other tools
 
 **Drawbacks:**
+
 - Not archivable — colour codes are stripped if redirected to a file
 - No remediation text shown inline
 - No hyperlinks to files
@@ -75,6 +78,7 @@ sensitive-scanner scan C:\Github\MyProject --format html --output report.html --
 ```
 
 The column is colour-coded:
+
 - Green badge (≥85%): strong detection
 - Amber badge (65–84%): moderate detection
 - Red badge (<65%): weak signal
@@ -94,19 +98,21 @@ sensitive-scanner scan C:\Github\MyProject --format html --output report.html --
 Add an **Obfuscation** column showing the review decision for each finding:
 
 ```powershell
-sensitive-scanner scan C:\Github\MyProject --format html --output report.html \
+sensitive-scanner scan C:\Github\MyProject --format html --output report.html `
   --session C:\Github\MyProject\pii-review-session.json
 ```
 
 The column values are: `approved`, `skipped`, `manual`, or `pending`.
 
 **Best for:**
+
 - Management and compliance reporting
 - Sharing findings with stakeholders who are not on the terminal
 - Archiving scan results
 - Attaching to Jira/Azure DevOps tickets
 
 **Drawbacks:**
+
 - Not easily diffed or version-controlled
 - Cannot be post-processed by scripts without parsing HTML
 
@@ -131,12 +137,14 @@ sensitive-scanner scan C:\Github\MyProject --format markdown --output report.md
 - Fix steps listed as numbered lists under each finding
 
 **Best for:**
+
 - Committing to a repository alongside the code (for team visibility)
 - Rendering in Confluence or GitHub wikis
 - Review in VS Code (`Ctrl+Shift+V` to preview)
 - Copy-pasting into tickets and documentation
 
 **Drawbacks:**
+
 - No interactivity (no expandable sections)
 - Tables become hard to read in raw form for large result sets
 - No colour coding
@@ -177,7 +185,7 @@ sensitive-scanner scan C:\Github\MyProject --format json --output report.json
       "scanners": ["gitleaks", "semgrep"],
       "category": "aws_access_key",
       "severity": "critical",
-      "confidence": 0.90,
+      "confidence": 0.9,
       "file": "src/config.py",
       "line": 14,
       "match": "AKIA****",
@@ -193,6 +201,7 @@ sensitive-scanner scan C:\Github\MyProject --format json --output report.json
 ```
 
 **Best for:**
+
 - CI pipelines that process findings programmatically
 - Storing results in a database or artefact store
 - Building dashboards or trend reports over time
@@ -200,6 +209,7 @@ sensitive-scanner scan C:\Github\MyProject --format json --output report.json
 - Comparing results between scans
 
 **Drawbacks:**
+
 - Not human-readable without processing
 - Requires tooling to view usefully
 
@@ -242,14 +252,14 @@ sensitive-scanner report --format html --output report-with-confidence.html --sh
 
 ## Choosing a format
 
-| I want to... | Use |
-|---|---|
-| See results immediately while working | Console (default) |
-| Share results with my team or manager | HTML |
-| Attach to a Jira / ADO ticket | HTML |
-| Commit findings to the repository | Markdown |
-| Process findings in a CI pipeline | JSON |
-| Review in VS Code or Confluence | Markdown |
-| Build a dashboard or trend report | JSON |
-| Archive scan history | JSON or HTML |
-| Show obfuscation decisions | HTML with `--session` |
+| I want to...                          | Use                   |
+| ------------------------------------- | --------------------- |
+| See results immediately while working | Console (default)     |
+| Share results with my team or manager | HTML                  |
+| Attach to a Jira / ADO ticket         | HTML                  |
+| Commit findings to the repository     | Markdown              |
+| Process findings in a CI pipeline     | JSON                  |
+| Review in VS Code or Confluence       | Markdown              |
+| Build a dashboard or trend report     | JSON                  |
+| Archive scan history                  | JSON or HTML          |
+| Show obfuscation decisions            | HTML with `--session` |

@@ -18,7 +18,7 @@ The agent finds the CLI by checking in this order:
 
 1. `sensitive-scanner` on your system PATH (available automatically after `uv sync`)
 2. Any `cli.py` under `%USERPROFILE%` whose path contains `lap-pii-screener`, `PII-Screener`, or `sensitive-scanner`
-3. A `cli.py` in the current workspace root (if you opened the lap-pii-screener repo itself)
+3. `src\cli.py` in the current workspace (if you opened the lap-pii-screener repo itself)
 4. Prompting you to provide the path if none of the above succeed
 
 ### 2. Python 3.11+
@@ -41,7 +41,7 @@ Without spaCy, the scanner still detects structured PII (SSNs, credit cards, ema
 
 ```
 uv sync --extra spacy
-python -m spacy download en_core_web_sm
+sensitive-scanner setup --spacy
 ```
 
 ### 5. Optional — Gitleaks binary (secrets scanner)
@@ -82,11 +82,11 @@ Open Copilot Chat in any workspace and either:
 
 - Select **Sensitive Code Scanner** from the `@` agent picker, or
 - Type a natural-language request — the agent's description matches phrases such as:
-  - *scan for PII*
-  - *check for secrets*
-  - *run pii scan*
-  - *sensitive data scan*
-  - *security scan codebase*
+  - _scan for PII_
+  - _check for secrets_
+  - _run pii scan_
+  - _sensitive data scan_
+  - _security scan codebase_
 
 ### Examples
 
@@ -100,7 +100,7 @@ Open Copilot Chat in any workspace and either:
 
 ## What the agent does
 
-1. **Locates the CLI** — checks for `sensitive-scanner` on PATH, searches `%USERPROFILE%` for a matching `cli.py`, checks the current workspace, then asks you if nothing is found.
+1. **Locates the CLI** — checks for `sensitive-scanner` on PATH, searches `%USERPROFILE%` for a matching `cli.py`, checks `src\cli.py` in the current workspace, then asks you if nothing is found.
 2. **Determines the target path** — uses the path you supply, or defaults to the current workspace root.
 3. **Runs the scan** — calls the CLI with the appropriate flags.
 4. **Presents findings** — total count, severity breakdown (critical / high / medium / low), and per-finding details (file, line, category). Secret values longer than 8 characters are redacted.
@@ -110,11 +110,11 @@ Open Copilot Chat in any workspace and either:
 
 ## Scan options
 
-| Flag | Values | Default | Purpose |
-|------|--------|---------|---------|
-| `--scanners` | `presidio`, `gitleaks`, `semgrep`, `sonarqube` | `presidio,gitleaks` | Scanners to run |
-| `--format` | `console`, `markdown`, `html`, `json` | `console` | Output format |
-| `--output` | file path | *(print to chat)* | Save report to file |
+| Flag         | Values                                         | Default           | Purpose             |
+| ------------ | ---------------------------------------------- | ----------------- | ------------------- |
+| `--scanners` | `presidio`, `gitleaks`, `semgrep`, `sonarqube` | all available     | Scanners to run     |
+| `--format`   | `console`, `markdown`, `html`, `json`          | `console`         | Output format       |
+| `--output`   | file path                                      | _(print to chat)_ | Save report to file |
 
 ---
 
@@ -122,21 +122,21 @@ Open Copilot Chat in any workspace and either:
 
 The built-in PII scanner covers:
 
-| Category | Examples |
-|----------|---------|
-| Email addresses | `user@example.com` |
-| Phone numbers | US (+1) and international E.164 |
-| US Social Security Numbers | `123-45-6789` |
-| Credit card numbers | Visa, Mastercard, Amex, Discover (Luhn-validated) |
-| IBAN / bank account numbers | `GB29NWBK60161331926819` |
-| UK National Insurance numbers | `AB123456C` |
-| Passport numbers | Generic 7–9 character alphanumeric |
-| Dates of birth | `YYYY-MM-DD`, `DD/MM/YYYY`, `MM/DD/YYYY` |
-| PEM private keys | `-----BEGIN RSA PRIVATE KEY-----` |
-| Database connection strings | Embedded credentials in URIs |
-| Hardcoded passwords | `password = "..."` style assignments |
-| JWT tokens | `eyJ...` header.payload.signature |
-| IPv4 addresses | Inside string literals |
-| Named entities (spaCy) | Person names, locations *(requires spaCy)* |
+| Category                      | Examples                                          |
+| ----------------------------- | ------------------------------------------------- |
+| Email addresses               | `user@example.com`                                |
+| Phone numbers                 | US (+1) and international E.164                   |
+| US Social Security Numbers    | `123-45-6789`                                     |
+| Credit card numbers           | Visa, Mastercard, Amex, Discover (Luhn-validated) |
+| IBAN / bank account numbers   | `GB29NWBK60161331926819`                          |
+| UK National Insurance numbers | `AB123456C`                                       |
+| Passport numbers              | Generic 7–9 character alphanumeric                |
+| Dates of birth                | `YYYY-MM-DD`, `DD/MM/YYYY`, `MM/DD/YYYY`          |
+| PEM private keys              | `-----BEGIN RSA PRIVATE KEY-----`                 |
+| Database connection strings   | Embedded credentials in URIs                      |
+| Hardcoded passwords           | `password = "..."` style assignments              |
+| JWT tokens                    | `eyJ...` header.payload.signature                 |
+| IPv4 addresses                | Inside string literals                            |
+| Named entities (spaCy)        | Person names, locations _(requires spaCy)_        |
 
 Gitleaks extends coverage with hundreds of additional patterns for cloud provider keys, tokens, and service credentials.

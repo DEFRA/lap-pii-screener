@@ -36,7 +36,7 @@ def _item(**kw) -> ReviewItem:
         rule_id="r1",
         category="pii_ssn",
         severity="high",
-        scanners=["pii"],
+        scanners=["presidio"],
         match_display="1234****",
         replacement="[REDACTED]",
     )
@@ -232,10 +232,10 @@ class TestCollectExclusionLists:
 
 class TestSmallHelpers:
     def test_parse_list(self) -> None:
-        assert cli._parse_scanner_list(["Gitleaks", "PII"]) == ["gitleaks", "pii"]
+        assert cli._parse_scanner_list(["Gitleaks", "Presidio"]) == ["gitleaks", "presidio"]
 
     def test_parse_string(self) -> None:
-        assert cli._parse_scanner_list("gitleaks, pii") == ["gitleaks", "pii"]
+        assert cli._parse_scanner_list("gitleaks, presidio") == ["gitleaks", "presidio"]
 
     def test_join_list(self) -> None:
         assert cli._join_suppress_value(["a", "b"]) == "a,b"

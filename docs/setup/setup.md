@@ -2,7 +2,10 @@
 
 This guide takes you from nothing to a fully configured scanner. Work through it in order — each step builds on the previous one.
 
+To run the scanner in Docker without installing Python or Java locally, see the [Docker Setup guide](docker.md).
+
 **Page contents**
+
 - [What you need](#what-you-need)
 - [Step 1 — Install Python](#step-1--install-python)
 - [Step 2 — Get the code](#step-2--get-the-code)
@@ -10,7 +13,8 @@ This guide takes you from nothing to a fully configured scanner. Work through it
 - [Step 4 — Register the `sensitive-scanner` command](#step-4--register-the-sensitive-scanner-command)
 - [Step 5 — Run the setup wizard](#step-5--run-the-setup-wizard)
 - [Step 6 — Install SonarQube (recommended)](#step-6--install-sonarqube-recommended)
-- [Step 7 — Install spaCy NLP model (optional)](#step-7--install-spacy-nlp-model-optional)
+- [Step 7 — Configure SonarCloud (optional)](#step-7--configure-sonarcloud-optional-tier-3)
+- [Step 8 — Install spaCy NLP model (optional)](#step-8--install-spacy-nlp-model-optional)
 - [Verify your full setup](#verify-your-full-setup)
 - [Air-gapped environments](#air-gapped-environments)
 - [VS Code chat agent setup](#vs-code-chat-agent-setup)
@@ -20,12 +24,12 @@ This guide takes you from nothing to a fully configured scanner. Work through it
 
 ## What you need
 
-| Requirement | Version | Purpose | Where to get it |
-|---|---|---|---|
-| **Python** | 3.11+ | The tool is written in Python | [python.org/downloads](https://www.python.org/downloads/) |
-| **Java** | 17+ | Required for SonarQube (recommended) | [adoptium.net](https://adoptium.net/temurin/releases/) |
-| **Git** | Any | Optional — needed for Git history scanning | [git-scm.com](https://git-scm.com/downloads) |
-| **Internet access** | — | First-run downloads binaries automatically | — |
+| Requirement         | Version | Purpose                                    | Where to get it                                           |
+| ------------------- | ------- | ------------------------------------------ | --------------------------------------------------------- |
+| **Python**          | 3.11+   | The tool is written in Python              | [python.org/downloads](https://www.python.org/downloads/) |
+| **Java**            | 17+     | Required for SonarQube (recommended)       | [adoptium.net](https://adoptium.net/temurin/releases/)    |
+| **Git**             | Any     | Optional — needed for Git history scanning | [git-scm.com](https://git-scm.com/downloads)              |
+| **Internet access** | —       | First-run downloads binaries automatically | —                                                         |
 
 ---
 
@@ -100,7 +104,7 @@ You should see a list of available commands. If you see an error, check that the
 
 ## Step 5 — Run the setup wizard
 
-The wizard downloads Gitleaks and checks your environment. This installs everything needed for Tier 1 scanning (Gitleaks + Semgrep + Presidio).
+The wizard downloads Gitleaks and checks your environment. This installs everything needed for Tier 1 scanning (Gitleaks + Semgrep + the built-in PII scanner).
 
 ```powershell
 sensitive-scanner setup
@@ -125,10 +129,10 @@ A green tick (✅) means ready. A dash (–) means the component is optional and
 
 SonarQube adds inter-procedural data-flow analysis and taint tracking that the pattern-based scanners cannot do. It is the most powerful scanner in the stack.
 
-### 6a — Install Java 21
+### 6a — Install Java 17 or newer
 
 1. Go to [adoptium.net/temurin/releases](https://adoptium.net/temurin/releases/)
-2. Select: **Version 21 (LTS)**, **OS Windows**, **Architecture x64**, **Package Type JDK**
+2. Select a supported version (17 or newer), **OS Windows**, **Architecture x64**, **Package Type JDK**
 3. Download the `.msi` installer
 4. Run it. On the **"Custom Setup"** screen, make sure both **"Add to PATH"** and **"Set JAVA_HOME variable"** are ticked
 5. Complete the installation
@@ -139,7 +143,7 @@ SonarQube adds inter-procedural data-flow analysis and taint tracking that the p
 java -version
 ```
 
-Expected: a line containing `openjdk version "21.x.x"`. Any version 17+ works.
+Expected: a line containing `openjdk version "17.x.x"` or newer.
 
 ### 6b — Download and configure SonarQube
 
@@ -154,7 +158,8 @@ This command will:
 3. Download **SonarQube Community Edition** (~500 MB) — the analysis server
 4. Configure SonarQube to run on **port 9100** (not the default 9000, which conflicts with ZScaler on corporate laptops)
 5. Start SonarQube and wait for it to become ready (2–3 minutes on first run while it builds its internal index)
-6. Generate an API token automatically
+6. Attempt to generate an API token automatically. The command prints the values; it does
+   not persist them to your user environment.
 
 When complete, the command prints:
 
@@ -196,7 +201,22 @@ This happens if SonarQube's default admin password was already changed from a pr
 
 ---
 
-## Step 7 — Install spaCy NLP model (optional)
+## Step 7 — Configure SonarCloud (optional, Tier 3)
+
+SonarCloud is an external service and is not suitable for repositories that must remain
+on-premises or air-gapped. Create a SonarCloud project and token, then set these variables
+in the environment used to run the scanner:
+
+```powershell
+[Environment]::SetEnvironmentVariable("SONAR_TOKEN", "your-sonarcloud-token", "User")
+[Environment]::SetEnvironmentVariable("SONAR_HOST_URL", "https://sonarcloud.io", "User")
+```
+
+Open a new terminal after setting them. The scanner reports Tier 3 when the SonarCloud URL
+and token are present. SonarCloud may require additional project or organisation settings
+depending on the repository being analysed.
+
+## Step 8 — Install spaCy NLP model (optional)
 
 spaCy adds named entity recognition: the scanner can detect person names and locations written inside code comments or string values — things no regex can reliably catch.
 
@@ -223,6 +243,16 @@ sensitive-scanner setup --check
 ```
 
 This checks every component and reports what is ready and what is missing.
+
+### Optional: Faker replacements
+
+Faker is only needed when obfuscation should generate realistic replacement values instead of redaction tokens. Install it in the project environment with:
+
+```powershell
+uv pip install faker
+```
+
+Then use `sensitive-scanner obfuscate <path> --obfuscation-strategy faker`. See the [Obfuscation guide](../guides/obfuscation.md#replacement-strategies) for details.
 
 ---
 
@@ -269,7 +299,7 @@ uv sync --no-index --find-links C:\bundle\wheels
 ## VS Code chat agent setup
 
 The MCP server lets you talk to the scanner in plain English inside VS Code Copilot Chat:
-*"scan C:\Github\MyProject and show me the critical findings"*
+_"scan C:\Github\MyProject and show me the critical findings"_
 
 ### Find your Python path
 
@@ -291,7 +321,7 @@ Copy the full path printed — for example `C:\Users\YourName\AppData\Local\Pyth
   "servers": {
     "pii-screener": {
       "command": "C:\\Users\\YourName\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe",
-      "args": ["C:\\Github\\lap-pii-screener\\server.py"],
+      "args": ["C:\\Github\\lap-pii-screener\\src\\server.py"],
       "env": {
         "SONAR_HOST_URL": "http://localhost:9100",
         "SONAR_TOKEN": "squ_abc123..."
@@ -309,13 +339,13 @@ Replace `command` with your Python path (use double backslashes). Set `SONAR_TOK
 
 Open Copilot Chat (`Ctrl+Alt+I`), ensure **Agent** mode is selected, and type naturally:
 
-| Example | What happens |
-|---|---|
-| `scan C:\Github\MyProject` | Full scan, shows summary |
-| `show me high and critical findings` | Filters last results |
-| `get the report as html` | Returns HTML report |
-| `get remediation for finding abc123` | Shows fix steps |
-| `check scanner status` | Reports active tier |
+| Example                              | What happens             |
+| ------------------------------------ | ------------------------ |
+| `scan C:\Github\MyProject`           | Full scan, shows summary |
+| `show me high and critical findings` | Filters last results     |
+| `get the report as html`             | Returns HTML report      |
+| `get remediation for finding abc123` | Shows fix steps          |
+| `check scanner status`               | Reports active tier      |
 
 ---
 
@@ -323,7 +353,7 @@ Open Copilot Chat (`Ctrl+Alt+I`), ensure **Agent** mode is selected, and type na
 
 ### `sensitive-scanner` is not recognised as a command
 
-Run `uv sync` from the `C:\Github\lap-pii-screener` folder. If that fails, check that `uv` is installed (`pip install uv`) and that Python 3.11+ is available. You can also run the scanner directly without installing it: `python -m cli --help`.
+Run `uv sync` from the `C:\Github\lap-pii-screener` folder. If that fails, check that `uv` is installed (`pip install uv`) and that Python 3.11+ is available. You can also run the scanner directly from the project folder with `uv run sensitive-scanner --help`.
 
 ### SonarQube does not start
 
@@ -333,7 +363,7 @@ Run `uv sync` from the `C:\Github\lap-pii-screener` folder. If that fails, check
 
 ### SonarQube starts but token is invalid
 
-Environment variables are only read in terminals opened *after* they were set. Open a new PowerShell window. If scans still fail, verify the values with:
+Environment variables are only read in terminals opened _after_ they were set. Open a new PowerShell window. If scans still fail, verify the values with:
 
 ```powershell
 echo $env:SONAR_TOKEN

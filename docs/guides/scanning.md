@@ -3,6 +3,7 @@
 This page covers everything about running a scan: which options are available, how to configure the scanner, what exclusions and suppressions do, and how to integrate with CI pipelines.
 
 **Page contents**
+
 - [Basic usage](#basic-usage)
 - [Choosing scanners](#choosing-scanners)
 - [Output and report formats](#output-and-report-formats)
@@ -60,14 +61,14 @@ sensitive-scanner scan C:\Github\MyProject --scanners gitleaks,semgrep
 
 Available scanner names:
 
-| Name | What it does |
-|---|---|
-| `gitleaks` | Secret pattern matching (AWS, GitHub, Stripe keys, etc.) |
-| `semgrep` | Code-structure-aware analysis (OWASP Top 10, hardcoded secrets) |
-| `presidio` | Custom PII detection (emails, phone numbers, NHS, NI, DoB, names) |
-| `sonarqube` | Deep inter-procedural analysis (requires SonarQube running) |
+| Name        | What it does                                                                                                                        |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `gitleaks`  | Secret pattern matching (AWS, GitHub, Stripe keys, etc.)                                                                            |
+| `semgrep`   | Code-structure-aware analysis (OWASP Top 10, hardcoded secrets)                                                                     |
+| `presidio`  | Built-in PII scanner (emails, phone numbers, NHS, NI, DoB, names); the name is a legacy CLI identifier and Presidio NER is optional |
+| `sonarqube` | Deep inter-procedural analysis (requires SonarQube running)                                                                         |
 
-Scanners that are not installed are skipped automatically without error. The active tier is shown when you run `sensitive-scanner status`.
+Scanners that are not installed are skipped automatically without error. The CLI requests all four scanners by default, while `obfuscate` defaults to Gitleaks, Semgrep, and the PII scanner. The active tier is shown when you run `sensitive-scanner status`.
 
 Multiple scanners can independently find the same issue. When they do, the finding appears once in the report with all scanner names listed and a boosted confidence score.
 
@@ -79,12 +80,12 @@ Multiple scanners can independently find the same issue. When they do, the findi
 sensitive-scanner scan <path> --format <format> --output <file>
 ```
 
-| Format | Flag | Best for |
-|---|---|---|
-| Console (default) | `--format console` | Immediate review in the terminal |
-| HTML | `--format html` | Sharing, email attachments, management reports |
-| Markdown | `--format markdown` | Confluence, GitHub, VS Code preview |
-| JSON | `--format json` | Feeding into other tools, CI artefact storage |
+| Format            | Flag                | Best for                                       |
+| ----------------- | ------------------- | ---------------------------------------------- |
+| Console (default) | `--format console`  | Immediate review in the terminal               |
+| HTML              | `--format html`     | Sharing, email attachments, management reports |
+| Markdown          | `--format markdown` | Confluence, GitHub, VS Code preview            |
+| JSON              | `--format json`     | Feeding into other tools, CI artefact storage  |
 
 If `--output` is omitted, the report prints to stdout. For HTML and Markdown this writes raw content, so use `--output` to save to a file.
 
@@ -344,11 +345,11 @@ To include confidence in an HTML report:
 sensitive-scanner scan <path> --format html --output report.html --show-confidence
 ```
 
-| Colour | Range | Meaning |
-|---|---|---|
-| Green | ≥ 85% | Strong evidence — highly likely a real finding |
-| Amber | 65–84% | Moderate evidence — worth reviewing |
-| Red | < 65% | Weak signal — context review needed |
+| Colour | Range  | Meaning                                        |
+| ------ | ------ | ---------------------------------------------- |
+| Green  | ≥ 85%  | Strong evidence — highly likely a real finding |
+| Amber  | 65–84% | Moderate evidence — worth reviewing            |
+| Red    | < 65%  | Weak signal — context review needed            |
 
 When multiple scanners independently find the same issue, the confidence is boosted by 8% per additional scanner (capped at 99%). This means a finding caught by both Gitleaks and Semgrep carries higher confidence than one found by only one scanner.
 
@@ -381,11 +382,11 @@ sensitive-scanner scan . --fail-on high --format json --output scan-results.json
 
 Exit codes:
 
-| Code | Meaning |
-|---|---|
-| 0 | Scan completed, no findings at or above the threshold |
-| 1 | Error (bad arguments, path not found, etc.) |
-| 2 | Scan completed, findings found at or above `--fail-on` threshold |
+| Code | Meaning                                                          |
+| ---- | ---------------------------------------------------------------- |
+| 0    | Scan completed, no findings at or above the threshold            |
+| 1    | Error (bad arguments, path not found, etc.)                      |
+| 2    | Scan completed, findings found at or above `--fail-on` threshold |
 
 GitHub Actions example:
 
@@ -409,27 +410,27 @@ GitHub Actions example:
 
 ### Severity levels
 
-| Severity | Meaning | What to do |
-|---|---|---|
-| **Critical** | Exposed secret or PII almost certainly real | Fix immediately |
-| **High** | Strong likelihood of a real issue | Fix before sharing the code |
-| **Medium** | Could be an issue — review the context | Investigate and fix or suppress |
-| **Low** | Weak signal — probably fine but worth a look | Review at your convenience |
+| Severity     | Meaning                                      | What to do                      |
+| ------------ | -------------------------------------------- | ------------------------------- |
+| **Critical** | Exposed secret or PII almost certainly real  | Fix immediately                 |
+| **High**     | Strong likelihood of a real issue            | Fix before sharing the code     |
+| **Medium**   | Could be an issue — review the context       | Investigate and fix or suppress |
+| **Low**      | Weak signal — probably fine but worth a look | Review at your convenience      |
 
 ### Finding fields
 
-| Field | What it means |
-|---|---|
-| **ID** | Unique identifier for this finding — used in obfuscation and edit commands |
-| **Severity** | How serious the issue is |
-| **Category** | Type of issue: `pii_email`, `aws_access_key`, `hardcoded_password`, etc. |
-| **File** | File path relative to the scan root |
-| **Line** | Line number in that file |
-| **Match** | Redacted preview of the matched value (e.g. `john***`) |
-| **Rule** | Rule ID that triggered this finding — use this in `--suppress` |
-| **Scanners** | Which scanner(s) detected this |
-| **Fix** | Step-by-step remediation instructions |
-| **Regulations** | Applicable regulations: GDPR, PCI DSS, PSR 2017, etc. |
+| Field           | What it means                                                              |
+| --------------- | -------------------------------------------------------------------------- |
+| **ID**          | Unique identifier for this finding — used in obfuscation and edit commands |
+| **Severity**    | How serious the issue is                                                   |
+| **Category**    | Type of issue: `pii_email`, `aws_access_key`, `hardcoded_password`, etc.   |
+| **File**        | File path relative to the scan root                                        |
+| **Line**        | Line number in that file                                                   |
+| **Match**       | Redacted preview of the matched value (e.g. `john***`)                     |
+| **Rule**        | Rule ID that triggered this finding — use this in `--suppress`             |
+| **Scanners**    | Which scanner(s) detected this                                             |
+| **Fix**         | Step-by-step remediation instructions                                      |
+| **Regulations** | Applicable regulations: GDPR, PCI DSS, PSR 2017, etc.                      |
 
 ---
 

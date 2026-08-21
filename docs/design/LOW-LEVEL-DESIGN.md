@@ -30,8 +30,8 @@ module to the modules it imports.
 
 ```mermaid
 flowchart TD
-    CLI["cli.py<br/><i>Typer commands</i>"]
-    SRV["server.py<br/><i>MCP tools</i>"]
+    CLI["src/cli.py<br/><i>Typer commands</i>"]
+    SRV["src/server.py<br/><i>MCP tools</i>"]
 
     ORCH["scanners/orchestrator.py"]
     BASE["scanners/base.py<br/>AbstractScanner"]
@@ -191,9 +191,12 @@ classDiagram
 ```
 
 > `Finding.id` is a 16-char SHA-256 of `file:line:rule_id` (`make_id`), which is
-> also the deduplication key. `Finding.match` is always stored redacted
-> (`redact` keeps the first 4 chars), and `confidence` defaults to `0.70`.
-> `ScanConfig.scanners` defaults to `[gitleaks, semgrep, presidio]`.
+> also the deduplication key. `Finding.match` is redacted by default
+> (`redact` keeps the first 4 chars) and contains the raw value only when
+> `show_secrets` is enabled. `confidence` defaults to `0.70`.
+> `ScanConfig.scanners` defaults to `[gitleaks, semgrep, presidio]`. The CLI's `scan`
+> command requests `sonarqube` as a fourth backend by default and skips it when it is
+> unavailable; `obfuscate` uses the three-scanner model by default.
 > `Report.build_summary()` recomputes `ScanSummary` counters from the current
 > `findings` list.
 
@@ -515,12 +518,12 @@ flowchart LR
 
 ## 12. Cross-References
 
-| Concern | HLD section | Source |
-|---|---|---|
-| Component responsibilities | HLD §3–§4 | `src/scanners/orchestrator.py` |
-| Suppression hierarchy | HLD §7 | `src/scanners/orchestrator.py`, `config_loader.py` |
-| Scanner tiers | HLD §8 | `src/scanners/orchestrator.py` |
-| MCP interface | HLD §9 | `src/server.py` |
-| Data models | LLD §3 | `src/models/finding.py`, `src/models/report.py` |
-| Enrichment | LLD §5 | `src/remediation/engine.py`, `regulation_engine.py` |
-| Obfuscation | LLD §8–§10 | `src/obfuscation/*` |
+| Concern                    | HLD section | Source                                              |
+| -------------------------- | ----------- | --------------------------------------------------- |
+| Component responsibilities | HLD §3–§4   | `src/scanners/orchestrator.py`                      |
+| Suppression hierarchy      | HLD §7      | `src/scanners/orchestrator.py`, `config_loader.py`  |
+| Scanner tiers              | HLD §8      | `src/scanners/orchestrator.py`                      |
+| MCP interface              | HLD §9      | `src/server.py`                                     |
+| Data models                | LLD §3      | `src/models/finding.py`, `src/models/report.py`     |
+| Enrichment                 | LLD §5      | `src/remediation/engine.py`, `regulation_engine.py` |
+| Obfuscation                | LLD §8–§10  | `src/obfuscation/*`                                 |

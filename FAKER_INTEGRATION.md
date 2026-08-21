@@ -1,10 +1,17 @@
 # Faker Integration for PII Obfuscation & Reports
 
-This document describes the new Faker integration that enables realistic fake data replacement as an alternative to simple redaction.
+This document describes the optional Faker integration for realistic fake data replacement during obfuscation.
+
+Faker is not installed by the base project dependencies. Install it before using `--obfuscation-strategy faker`:
+
+```powershell
+uv pip install faker
+```
 
 ## Overview
 
 Users can now choose how to obfuscate PII and secrets:
+
 - **redaction** (default): Replace with `[REDACTED_*]` placeholder tokens
 - **faker**: Replace with realistic fake data (names, emails, phone numbers, etc.)
 - **all**: Ask for each finding during interactive TUI review
@@ -13,19 +20,23 @@ Users can now choose how to obfuscate PII and secrets:
 
 ### 1. Faker-Generated Replacement Values
 
-The new `src/obfuscation/faker_strategies.py` module generates realistic fake data for 54+ categories:
+The `src/obfuscation/faker_strategies.py` module generates realistic fake data for the supported finding categories:
 
 **PII Categories:**
+
 - `pii_email`, `pii_phone`, `pii_ssn`, `pii_credit_card`, `pii_iban`, `pii_passport`, `pii_drivers_license`, `pii_bank_account`, `pii_dob`, `pii_ip_address`, `pii_person_name`, `pii_address`, `pii_mac_address`
 
 **UK-Specific:**
+
 - `pii_nhs_number`, `pii_uk_postcode`, `pii_uk_driving_licence`
 
 **API Keys & Credentials:**
+
 - AWS (access/secret), GCP, Azure, GitHub, GitLab, Stripe, Slack, Twilio, SendGrid, OpenAI, generic API keys
 - `hardcoded_password`, `db_password`, `oauth_secret`
 
 **Cryptography & Security:**
+
 - `private_key_rsa`, `encryption_key`, `jwt_token`, `db_connection_string`, `webhook_url_secret`, `generic_secret`
 
 ### 2. Enhanced ReviewItem Model
@@ -82,12 +93,12 @@ Report findings show a visual indicator when Faker was used:
 
 ### Files Modified
 
-1. **pyproject.toml**
-   - Added `faker==28.1.0` to dependencies
+1. **Optional dependency**
+   - Faker is installed separately with `uv pip install faker`; it is not part of the base project dependencies.
 
-2. **src/obfuscation/faker_strategies.py** (NEW)
+2. **src/obfuscation/faker_strategies.py**
    - Implements `get_faker_replacement(category: str) -> str`
-   - Maps 54+ finding categories to Faker generators
+   - Maps supported finding categories to Faker generators
    - Generates realistic, category-appropriate fake values
 
 3. **src/obfuscation/session.py**
@@ -119,7 +130,9 @@ Report findings show a visual indicator when Faker was used:
 sensitive-scanner obfuscate ./my-project --obfuscation-strategy faker
 ```
 
-This scans the project, marks all findings as approved with Faker replacements, and applies them without user interaction.
+This scans the project and opens the review UI with Faker replacements selected. Use
+`--auto-approve <severity>` when you want findings at or above a severity threshold approved
+without review; findings below that threshold remain in the UI.
 
 ### Example 2: Ask per-finding
 
@@ -128,6 +141,7 @@ sensitive-scanner obfuscate ./my-project --obfuscation-strategy all
 ```
 
 Opens the interactive TUI where users can:
+
 - Press [a] to approve with current strategy
 - Press [f] to toggle to Faker and see the replacement
 - Press [e] to edit the replacement manually
@@ -150,6 +164,7 @@ sensitive-scanner obfuscate ./my-project \
 ```
 
 The HTML report will show:
+
 - ✓ Findings obfuscated with redaction
 - ✦ Findings obfuscated with Faker
 
@@ -161,10 +176,13 @@ The HTML report will show:
 # 1. Install uv package manager
 pip install uv
 
-# 2. Sync project dependencies (including dev dependencies)
+# 2. Install Faker for this feature
+uv pip install faker
+
+# 3. Sync project development dependencies, if running tests
 uv sync --extra dev
 
-# 3. Verify Faker is installed
+# 4. Verify Faker is installed
 python -c "from faker import Faker; print(Faker().name())"
 ```
 
@@ -227,26 +245,20 @@ uv run pytest tests/test_cli.py::test_obfuscate -v
 4. **Preservation Rules**: Smart preservation of field lengths/formats for backward compatibility
 5. **A/B Testing Support**: Generate multiple variants per finding for testing
 
-## Configuration File Support
-
-Users can specify the default strategy in `sensitive-scanner.yaml`:
-
-```yaml
-obfuscation:
-  strategy: faker
-  # or: redaction, all
-```
-
 ## Troubleshooting
 
 ### Issue: "faker" strategy not recognized
-**Solution**: Ensure Faker is installed: `pip install faker`
+
+**Solution**: Ensure Faker is installed in the active environment: `uv pip install faker`
 
 ### Issue: Unknown category falls back to generic password
+
 **Solution**: This is expected for rare categories. The fallback ensures nothing breaks.
 
 ### Issue: HTML report doesn't show Faker badge
-**Solution**: 
+
+**Solution**:
+
 1. Verify the session file was saved with strategy info
 2. Check that findings have `obfuscation_strategy == "faker"`
 3. Ensure HTML report was generated with updated template

@@ -6,7 +6,7 @@ Usage examples:
   sensitive-scanner scan ./my-project
   sensitive-scanner scan ./my-project --format markdown --output report.md
   sensitive-scanner scan ./my-project --format html    --output report.html
-  sensitive-scanner scan ./my-project --scanners gitleaks,pii
+    sensitive-scanner scan ./my-project --scanners gitleaks,presidio
   sensitive-scanner scan ./my-project --history
   sensitive-scanner status
   sensitive-scanner report --format markdown
@@ -377,7 +377,7 @@ def scan(  # NOSONAR - CLI entry point; each parameter is a distinct user-facing
         "--scanners", "-s",
         help=(
             "Comma-separated list of scanners to run. "
-            "Available: gitleaks, semgrep, pii, sonarqube. "
+            "Available: gitleaks, semgrep, presidio, sonarqube. "
             "Defaults to all available."
         ),
     ),

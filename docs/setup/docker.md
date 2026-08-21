@@ -33,7 +33,7 @@ Any of the following Docker setups will work:
 
 Run the appropriate `init-docker` script for your shell. Pass the path to the source code you want to scan. The script builds the Docker image if needed, then drops you into an interactive shell inside the container.
 
-The source directory is mounted at `/source` inside the container — you do not need to specify it again for subsequent commands. You can also reference it via the `PII_SCREENER_SOURCE_DIR` environment variable.
+The source directory is mounted at `/source` inside the container — you do not need to specify it again for subsequent commands.
 
 ### Bash / WSL
 
@@ -77,6 +77,12 @@ Installs only the baseline dependencies without optional extras:
 ./scripts/init-slim
 ```
 
+Faker-based obfuscation is optional in both modes. To use it, install Faker in the container after initialization:
+
+```bash
+uv pip install faker
+```
+
 See the [Setup Guide](setup.md) for details on what each scanner provides.
 
 ---
@@ -96,7 +102,7 @@ All commands described in the [Scanning guide](../guides/scanning.md) work the s
 ./scripts/screener scan /source --format html --output /source/report.html
 
 # Scan Git history
-./scripts/screener scan /source --git-history
+./scripts/screener scan /source --history
 ```
 
 Refer to the [Scanning guide](../guides/scanning.md) for the full list of options.

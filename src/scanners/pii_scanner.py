@@ -517,7 +517,7 @@ def _build_presidio_finding(  # pragma: no cover - requires optional Presidio in
     display = name if show_secrets else Finding.redact(name)
     return Finding(
         id=Finding.make_id(file_rel, lineno, "presidio_person"),
-        scanners=["pii"],
+        scanners=["presidio"],
         category=category,
         severity="medium",
         confidence=round(score, 4),
@@ -562,7 +562,7 @@ def _build_spacy_finding(  # pragma: no cover - requires optional spaCy install
     display = text if show_secrets else Finding.redact(text)
     return Finding(
         id=Finding.make_id(file_rel, lineno, "spacy_person"),
-        scanners=["pii"],
+        scanners=["presidio"],
         category=category,
         severity="low",
         confidence=0.65,
@@ -713,7 +713,7 @@ def _make_name_finding(
     rule = _ENGINE.lookup(category)
     return Finding(
         id=Finding.make_id(file_rel, row_idx, id_suffix),
-        scanners=["pii"],
+        scanners=["presidio"],
         category=category,
         severity="medium",
         file=file_rel,
@@ -1200,7 +1200,7 @@ def _findings_for_pattern(
         display = matched_text if show_secrets else Finding.redact(matched_text)
         out.append(Finding(
             id=Finding.make_id(file_rel, lineno, f"{rule_id}_{source_tag}"),
-            scanners=["pii"],
+            scanners=["presidio"],
             category=category,
             severity=severity,
             file=file_rel,
@@ -1317,7 +1317,7 @@ def _content_findings_for_pattern(
         display = matched_text if show_secrets else Finding.redact(matched_text)
         out.append(Finding(
             id=Finding.make_id(file_rel, line, rule_id),
-            scanners=["pii"],
+            scanners=["presidio"],
             category=category,
             severity=severity,
             confidence=_RULE_CONFIDENCE.get(rule_id, 0.70),
