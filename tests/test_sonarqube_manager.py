@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import io
 import subprocess
 import sys
@@ -436,7 +437,7 @@ class TestScannerInstall:
         monkeypatch.setattr(sm, "_download_and_extract_zip", _dl)
         out = await sm.ensure_sonar_scanner()
         assert out == tmp_path
-        assert "releases/download/5.0/sonar-scanner-cli-5.0-windows-x64.zip" in captured["url"]
+        assert captured["url"] == "https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-5.0-windows-x64.zip"
 
     @pytest.mark.asyncio
     async def test_ensure_scanner_unix_chmods_exe(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -570,6 +571,41 @@ class TestStartScript:
 
 
 # --------------------------------------------------------------------------- #
+# _any_sonarqube_jars_running                                                 #
+# --------------------------------------------------------------------------- #
+
+
+class TestAnySonarqubeJarsRunning:
+    def test_returns_true_when_jar_matches(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        sq_dir = Path("/opt/sonarqube")
+        monkeypatch.setattr(sm, "_SQ_DIR", sq_dir)
+        proc = MagicMock()
+        proc.info = {"cmdline": ["java", "-jar", str(sq_dir / "lib" / "sonar-application.jar")]}
+        monkeypatch.setattr(sm.psutil, "process_iter", lambda attrs: [proc])
+        assert sm._any_sonarqube_jars_running() is True
+
+    def test_returns_false_when_no_match(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(sm, "_SQ_DIR", Path("/opt/sonarqube"))
+        proc = MagicMock()
+        proc.info = {"cmdline": ["python", "-m", "http.server"]}
+        monkeypatch.setattr(sm.psutil, "process_iter", lambda attrs: [proc])
+        assert sm._any_sonarqube_jars_running() is False
+
+    def test_ignores_processes_that_raise(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(sm, "_SQ_DIR", Path("/opt/sonarqube"))
+
+        class _BadProc:
+            @property
+            def info(self):
+                raise sm.psutil.NoSuchProcess(1234)
+
+        good = MagicMock()
+        good.info = {"cmdline": None}
+        monkeypatch.setattr(sm.psutil, "process_iter", lambda attrs: [_BadProc(), good])
+        assert sm._any_sonarqube_jars_running() is False
+
+
+# --------------------------------------------------------------------------- #
 # start_and_wait                                                              #
 # --------------------------------------------------------------------------- #
 
@@ -584,7 +620,15 @@ class TestStartAndWait:
     async def test_ready_immediately_windows(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(sm, "_start_script", lambda h: tmp_path / "s.bat")
         monkeypatch.setattr(sm.platform, "system", lambda: "Windows")
-        monkeypatch.setattr(sm.asyncio, "create_subprocess_exec", AsyncMock(return_value=MagicMock()))
+        proc = MagicMock()
+
+        async def _never_exits() -> int:
+            await asyncio.Event().wait()
+            return 0
+
+        proc.wait = AsyncMock(side_effect=_never_exits)
+        monkeypatch.setattr(sm.asyncio, "create_subprocess_exec", AsyncMock(return_value=proc))
+        monkeypatch.setattr(sm, "_any_sonarqube_jars_running", lambda: True)
         resp = MagicMock()
         resp.json = MagicMock(return_value={"status": "UP"})
         client = AsyncMock()
@@ -593,31 +637,50 @@ class TestStartAndWait:
         client.__aexit__ = AsyncMock(return_value=False)
         ticks = []
         with patch.object(sm.httpx, "AsyncClient", return_value=client):
-            ok = await sm.start_and_wait(tmp_path, tick_callback=lambda e, t: ticks.append(e))
+            ok = await sm.start_and_wait(
+                tmp_path,
+                initial_delay=0,
+                tick_callback=lambda e: ticks.append(e),
+            )
         assert ok is True
         assert ticks  # tick_callback fired at least once
 
     @pytest.mark.asyncio
-    async def test_timeout_returns_false(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def test_no_running_jars_returns_false(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(sm, "_start_script", lambda h: tmp_path / "s")
         monkeypatch.setattr(sm.platform, "system", lambda: "Linux")
-        monkeypatch.setattr(sm.asyncio, "create_subprocess_exec", AsyncMock(return_value=MagicMock()))
-        monkeypatch.setattr(sm.asyncio, "sleep", AsyncMock())
-        # time advances past max_wait after the first failed poll
-        calls = {"n": 0}
+        proc = MagicMock()
+        proc.wait = AsyncMock(return_value=0)
+        monkeypatch.setattr(sm.asyncio, "create_subprocess_exec", AsyncMock(return_value=proc))
+        monkeypatch.setattr(sm, "_any_sonarqube_jars_running", lambda: False)
+        ok = await sm.start_and_wait(tmp_path, initial_delay=0)
+        assert ok is False
 
-        def _mono() -> float:
-            calls["n"] += 1
-            return 0.0 if calls["n"] <= 2 else 999.0
+    @pytest.mark.asyncio
+    async def test_jars_exit_before_health_returns_false(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(sm, "_start_script", lambda h: tmp_path / "s")
+        monkeypatch.setattr(sm.platform, "system", lambda: "Linux")
+        proc = MagicMock()
+        proc.wait = AsyncMock(return_value=7)
+        monkeypatch.setattr(sm.asyncio, "create_subprocess_exec", AsyncMock(return_value=proc))
+        running = iter((True, False))
+        monkeypatch.setattr(sm, "_any_sonarqube_jars_running", lambda: next(running))
 
-        monkeypatch.setattr(sm.time, "monotonic", _mono)
         client = AsyncMock()
         client.get = AsyncMock(side_effect=httpx.HTTPError("down"))
         client.__aenter__ = AsyncMock(return_value=client)
         client.__aexit__ = AsyncMock(return_value=False)
+
         with patch.object(sm.httpx, "AsyncClient", return_value=client):
-            ok = await sm.start_and_wait(tmp_path, max_wait=180)
+            with patch.object(sm.asyncio, "sleep", new=AsyncMock()):
+                ok = await sm.start_and_wait(tmp_path, initial_delay=0)
+
         assert ok is False
+        client.get.assert_awaited_once()
 
 
 # --------------------------------------------------------------------------- #

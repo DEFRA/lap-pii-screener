@@ -68,7 +68,7 @@ SPECS: dict[str, BinarySpec] = {
     ),
     # Semgrep on Linux/macOS: standalone binary from GitHub releases.
     # On Windows, Semgrep is distributed via pip (no GitHub release binary).
-    # SemgrepScanner handles the pip-installed exe directly.
+    # SemgrepScanner handles the uv-pip-installed exe directly.
     "semgrep": BinarySpec(
         name="semgrep",
         owner="semgrep",

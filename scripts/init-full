@@ -1,0 +1,14 @@
+#!/bin/bash
+
+# Installs full screener prerequisites, including all extras and optional scanners.
+# Usage: ./scripts/init-full
+
+set -euo pipefail
+
+echo "Syncing Python dependencies with all extras..."
+uv sync --all-extras
+
+echo "Running sensitive-scanner setup for SonarQube and spaCy..."
+uv run sensitive-scanner setup --sonarqube --spacy
+
+echo "Prerequisite setup completed successfully."

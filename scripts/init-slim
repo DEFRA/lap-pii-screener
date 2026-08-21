@@ -1,0 +1,14 @@
+#!/bin/bash
+
+# Installs baseline screener prerequisites without optional extras.
+# Usage: ./scripts/init-slim
+
+set -euo pipefail
+
+echo "Syncing minimal Python dependencies..."
+uv sync
+
+echo "Running sensitive-scanner setup..."
+uv run sensitive-scanner setup
+
+echo "Prerequisite setup completed successfully."

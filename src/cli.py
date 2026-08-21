@@ -15,6 +15,9 @@ Usage examples:
 from __future__ import annotations
 
 import asyncio
+import os
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 from typing import Optional
@@ -70,6 +73,8 @@ _FORMAT_EXTENSIONS = {
     "html": ".html",
     "console": ".txt",
 }
+
+_SOURCE_DIR_ENV = "PII_SCREENER_SOURCE_DIR"
 
 
 def _render_and_write(report: Report, fmt: str, output: Path | None) -> None:
@@ -130,6 +135,21 @@ def _validate_path(path: Path) -> Path:
         _console.print(f"[bold red]Error:[/bold red] Path is not a directory: {path}")
         raise typer.Exit(code=1)
     return path
+
+
+def _resolve_target_path(path: Path | None) -> Path:
+    if path is not None:
+        return _validate_path(path)
+
+    env_path = os.environ.get(_SOURCE_DIR_ENV)
+    if env_path:
+        _console.print(f"[dim]Using {_SOURCE_DIR_ENV}: {Path(env_path).resolve()}[/dim]")
+        return _validate_path(Path(env_path))
+
+    _console.print(
+        f"[bold red]Error:[/bold red] Path is required. Provide a path or set {_SOURCE_DIR_ENV}."
+    )
+    raise typer.Exit(code=1)
 
 
 def _load_yaml_config(config_file: Optional[Path], target: Path) -> dict:
@@ -346,8 +366,8 @@ def _apply_fail_on(report, fail_on) -> None:
 
 @app.command()
 def scan(  # NOSONAR - CLI entry point; each parameter is a distinct user-facing option
-    path: Path = typer.Argument(
-        ...,
+    path: Path | None = typer.Argument(
+        None,
         help="Directory to scan.",
         exists=False,  # validated manually for nicer error messages
         file_okay=False,
@@ -454,7 +474,7 @@ def scan(  # NOSONAR - CLI entry point; each parameter is a distinct user-facing
     ),
 ) -> None:
     """Scan a directory for secrets, API keys, and PII."""
-    target = _validate_path(path)
+    target = _resolve_target_path(path)
 
     # Parse scanners
     scanner_list: list[str] | None = None
@@ -627,6 +647,25 @@ _SR_OK   = "[bold green]✅[/bold green]"
 _SR_WARN = "[bold yellow]⚠ [/bold yellow]"
 _SR_FAIL = "[bold red]✗ [/bold red]"
 _SR_SKIP = "[dim]–[/dim]"
+
+def _create_airgap_bundle(non_interactive: bool = False) -> Path:
+    """Create an offline bundle with downloaded scanner assets and Python wheels."""
+    from scanners.airgap_manager import create_bundle
+    try:
+        return create_bundle(_ROOT.parent, Path.cwd(), console=_console, non_interactive=non_interactive)
+    except RuntimeError as exc:
+        _console.print(f"[bold red]{exc}[/bold red]")
+        raise typer.Exit(code=1)
+
+
+def _install_airgap_bundle(bundle_path: Path) -> None:
+    """Install scanner assets and Python packages from a local offline bundle zip."""
+    from scanners.airgap_manager import install_bundle
+    try:
+        install_bundle(bundle_path, _ROOT.parent, console=_console)
+    except (FileNotFoundError, RuntimeError) as exc:
+        _console.print(f"[bold red]{exc}[/bold red]")
+        raise typer.Exit(code=1)
 
 
 def _run_gitleaks_setup(check: bool, results: list) -> None:
@@ -874,7 +913,7 @@ def _setup_sonarqube_start(check: bool, results: list) -> None:
     _console.print(f"\n  Starting SonarQube on port {SONAR_PORT} (first start can take ~2 min)...")
     host_url = f"http://localhost:{SONAR_PORT}"
     try:
-        up = asyncio.run(start_and_wait(sq_home, port=SONAR_PORT, max_wait=180))
+        up = asyncio.run(start_and_wait(sq_home, port=SONAR_PORT))
     except Exception as exc:
         results.append((_LABEL_SONARQUBE_START, _SR_FAIL, str(exc)))
         return
@@ -943,6 +982,16 @@ def setup(
         "--non-interactive",
         help="Skip confirmation prompts (for scripted / CI use).",
     ),
+    airgap: bool = typer.Option(
+        False,
+        "--airgap",
+        help="Create an offline installation bundle zip in the current repository.",
+    ),
+    airgap_bundle: Optional[Path] = typer.Option(
+        None,
+        "--airgap-bundle",
+        help="Install from an offline bundle zip created by --airgap.",
+    ),
 ) -> None:
     """
     Install and configure sensitive-scanner dependencies.
@@ -953,10 +1002,24 @@ def setup(
     --sonarqube:        also downloads SonarQube CE + sonar-scanner-cli (~550 MB).
     --all:              everything above.
     --check:            report current status without installing anything.
+    --airgap:           create an offline installation bundle zip.
+    --airgap-bundle:    install from a previously created offline bundle zip.
     """
     import sys as _sys
     from rich.table import Table
     from scanners.sonarqube_manager import _SQ_DIR
+
+    if airgap and airgap_bundle is not None:
+        _console.print("[bold red]Choose one:[/bold red] use either --airgap or --airgap-bundle, not both.")
+        raise typer.Exit(code=1)
+
+    if airgap:
+        _create_airgap_bundle(non_interactive=non_interactive)
+        return
+
+    if airgap_bundle is not None:
+        _install_airgap_bundle(airgap_bundle)
+        return
 
     do_sonarqube = sonarqube or all_deps
     do_spacy = spacy_nlp or all_deps
@@ -1109,8 +1172,8 @@ def _obf_print_summary(report) -> None:
 
 @app.command()
 def obfuscate(
-    path: Path = typer.Argument(
-        ...,
+    path: Path | None = typer.Argument(
+        None,
         help="Directory to scan and obfuscate.",
         exists=True,
         file_okay=False,
@@ -1217,7 +1280,7 @@ def obfuscate(
     from obfuscation.session import ReviewSession
     from obfuscation.reviewer import run_review
 
-    target = _validate_path(path)
+    target = _resolve_target_path(path)
     _ts = _dt.now().strftime("%Y%m%d_%H%M%S")
     _backup_dir   = backup_dir   or (target / ".pii-backups" / _ts)
     _session_path = session_file or (target / "pii-review-session.json")

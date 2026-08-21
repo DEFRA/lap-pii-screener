@@ -794,6 +794,82 @@ class TestSetupSonarqube:
         assert results[0][1] == cli._SR_OK
 
 
+class TestCreateAndInstallAirgapBundleHelpers:
+    def test_create_airgap_bundle_success(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+        import scanners.airgap_manager as am
+
+        expected = tmp_path / "bundle.zip"
+        monkeypatch.setattr(am, "create_bundle", lambda *a, **kw: expected)
+        result = cli._create_airgap_bundle(non_interactive=True)
+        assert result == expected
+
+    def test_create_airgap_bundle_failure_raises_exit(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        import scanners.airgap_manager as am
+
+        def _raise(*a, **kw):
+            raise RuntimeError("download failed")
+
+        monkeypatch.setattr(am, "create_bundle", _raise)
+        with pytest.raises(typer.Exit):
+            cli._create_airgap_bundle()
+
+    def test_install_airgap_bundle_success(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+        import scanners.airgap_manager as am
+
+        called = {"v": False}
+        monkeypatch.setattr(am, "install_bundle", lambda *a, **kw: called.update(v=True))
+        cli._install_airgap_bundle(tmp_path / "bundle.zip")
+        assert called["v"] is True
+
+    def test_install_airgap_bundle_failure_raises_exit(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        import scanners.airgap_manager as am
+
+        def _raise(*a, **kw):
+            raise FileNotFoundError("no bundle")
+
+        monkeypatch.setattr(am, "install_bundle", _raise)
+        with pytest.raises(typer.Exit):
+            cli._install_airgap_bundle(tmp_path / "bundle.zip")
+
+
+class TestSetupAirgap:
+    def test_setup_airgap_dispatches(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        called = {"v": False}
+
+        def _fake_bundle(**kwargs) -> Path:  # noqa: ANN003
+            called["v"] = True
+            return Path("bundle.zip")
+
+        monkeypatch.setattr(cli, "_create_airgap_bundle", _fake_bundle)
+        result = runner.invoke(cli.app, ["setup", "--airgap", "--non-interactive"])
+        assert result.exit_code == 0
+        assert called["v"] is True
+
+    def test_setup_airgap_bundle_dispatches(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+        bundle = tmp_path / "bundle.zip"
+        bundle.write_text("x", encoding="utf-8")
+        called = {"path": None}
+
+        def _fake_install(path: Path) -> None:
+            called["path"] = path
+
+        monkeypatch.setattr(cli, "_install_airgap_bundle", _fake_install)
+        result = runner.invoke(cli.app, ["setup", "--airgap-bundle", str(bundle)])
+        assert result.exit_code == 0
+        assert called["path"] == bundle
+
+    def test_setup_airgap_flags_mutually_exclusive(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+        monkeypatch.setattr(cli, "_create_airgap_bundle", MagicMock())
+        monkeypatch.setattr(cli, "_install_airgap_bundle", MagicMock())
+        bundle = tmp_path / "bundle.zip"
+        bundle.write_text("x", encoding="utf-8")
+        result = runner.invoke(cli.app, ["setup", "--airgap", "--airgap-bundle", str(bundle)])
+        assert result.exit_code == 1
+        assert "either --airgap or --airgap-bundle" in result.stdout
+
+
 # --------------------------------------------------------------------------- #
 # obfuscate helpers                                                            #
 # --------------------------------------------------------------------------- #
@@ -879,8 +955,9 @@ class TestEditHelpers:
         assert item.decision == "approved"
 
     def test_update_decision_invalid(self) -> None:
+        item = _item()
         with pytest.raises(typer.Exit):
-            cli._edit_update_decision(_item(), "bogus")
+            cli._edit_update_decision(item, "bogus")
 
     def test_update_decision_prompt(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from rich import prompt
@@ -942,6 +1019,19 @@ class TestScanCommand:
         report = make_report(findings=[])
         monkeypatch.setattr(cli, "run_scan", AsyncMock(return_value=report))
         result = runner.invoke(cli.app, ["scan", str(tmp_path)])
+        assert result.exit_code == 0
+
+    def test_scan_requires_path_or_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("PII_SCREENER_SOURCE_DIR", raising=False)
+        result = runner.invoke(cli.app, ["scan"])
+        assert result.exit_code == 1
+        assert "PII_SCREENER_SOURCE_DIR" in result.stdout
+
+    def test_scan_uses_env_source_dir(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        report = make_report(findings=[])
+        monkeypatch.setattr(cli, "run_scan", AsyncMock(return_value=report))
+        monkeypatch.setenv("PII_SCREENER_SOURCE_DIR", str(tmp_path))
+        result = runner.invoke(cli.app, ["scan"])
         assert result.exit_code == 0
 
     def test_scan_unknown_scanner(self, tmp_path: Path) -> None:
@@ -1082,6 +1172,20 @@ class TestObfuscateCommand:
         _session(items=[_item()]).save(sess)
         monkeypatch.setattr(cli, "_obf_apply_saved_session", MagicMock())
         result = runner.invoke(cli.app, ["obfuscate", str(tmp_path), "--apply-session", str(sess)])
+        assert result.exit_code == 0
+
+    def test_obfuscate_requires_path_or_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("PII_SCREENER_SOURCE_DIR", raising=False)
+        result = runner.invoke(cli.app, ["obfuscate"])
+        assert result.exit_code == 1
+        assert "PII_SCREENER_SOURCE_DIR" in result.stdout
+
+    def test_obfuscate_uses_env_source_dir(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        report = make_report(findings=[])
+        from scanners import orchestrator
+        monkeypatch.setattr(orchestrator, "run_scan", AsyncMock(return_value=report))
+        monkeypatch.setenv("PII_SCREENER_SOURCE_DIR", str(tmp_path))
+        result = runner.invoke(cli.app, ["obfuscate"])
         assert result.exit_code == 0
 
     def test_obfuscate_no_findings(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

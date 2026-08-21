@@ -153,7 +153,7 @@ def _find_semgrep() -> Optional[str]:
     """
     Locate the semgrep executable.  Checks (in order):
     1. The Python Scripts directory alongside the running interpreter
-       (where `pip install semgrep` places semgrep.exe on Windows)
+       (where `uv pip install semgrep` places semgrep.exe on Windows)
     2. System PATH
     """
     exe = "semgrep.exe" if platform.system() == "Windows" else "semgrep"

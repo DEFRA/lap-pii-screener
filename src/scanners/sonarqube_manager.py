@@ -26,7 +26,6 @@ import stat
 import subprocess
 import sys
 import tempfile
-import time
 import zipfile
 from pathlib import Path
 from typing import Optional
@@ -34,6 +33,7 @@ from typing import Optional
 import aiofiles
 import aiofiles.tempfile
 import httpx
+import psutil
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -49,7 +49,7 @@ META_FILE = _BASE_DIR / "meta.json"
 _GITHUB_LATEST = "https://api.github.com/repos/{owner}/{repo}/releases/latest"
 _SQ_BINARIES_URL = (
     "https://binaries.sonarsource.com/Distribution/sonarqube/"
-    "sonarqube-{ver}-community.zip"
+    "sonarqube-{ver}.zip"
 )
 _TEMURIN_URL = "https://adoptium.net/temurin/releases/"
 
@@ -373,8 +373,7 @@ async def ensure_sonar_scanner(progress_callback=None) -> Optional[Path]:
             break
     if not download_url:
         download_url = (
-            f"https://github.com/SonarSource/sonar-scanner-cli"
-            f"/releases/download/{version}/{asset}"
+            f"https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/{asset}"
         )
 
     result = await _download_and_extract_zip(
@@ -450,6 +449,9 @@ async def ensure_sonarqube(progress_callback=None) -> Optional[Path]:
 
 # ── Start and health-wait ─────────────────────────────────────────────────────
 
+_INITIAL_STARTUP_DELAY: int = 30  # seconds — allow JARs to appear in process list
+
+
 def _start_script(sq_home: Path) -> Optional[Path]:
     system = platform.system()
     machine = platform.machine().lower()
@@ -463,16 +465,37 @@ def _start_script(sq_home: Path) -> Optional[Path]:
     return s if s.exists() else None
 
 
+def _any_sonarqube_jars_running() -> bool:
+    """Return True if any .jar from the SonarQube install directory is running."""
+    sq_dir = str(_SQ_DIR)
+    for proc in psutil.process_iter(["cmdline"]):
+        try:
+            cmdline = " ".join(proc.info["cmdline"] or [])
+            if sq_dir in cmdline and ".jar" in cmdline:
+                return True
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            pass
+    return False
+
+
 async def start_and_wait(
     sq_home: Path,
     port: int = SONAR_PORT,
-    max_wait: int = 180,
+    initial_delay: int = _INITIAL_STARTUP_DELAY,
     tick_callback=None,
 ) -> bool:
     """
     Launch SonarQube (in background) then poll /api/system/status until UP.
-    tick_callback(elapsed, total) is called every 5 s if provided.
-    Returns True when UP, False on timeout.
+
+    An initial fixed delay of ``initial_delay`` seconds is applied first to
+    allow the JARs to appear in the process list before polling begins.
+    Polling continues while .jar files from the SonarQube installation directory
+    remain in the process list; returns False if they all exit before the server
+    reports UP.
+
+    tick_callback(elapsed) is called every 5 s during the polling loop
+    if provided.
+    Returns True when UP, False otherwise.
     """
     script = _start_script(sq_home)
     if not script:
@@ -495,13 +518,16 @@ async def start_and_wait(
             stderr=asyncio.subprocess.DEVNULL,
         )
 
+    # Initial fixed delay: give JARs time to appear in the process list
+    await asyncio.sleep(initial_delay)
+
     host = f"http://localhost:{port}"
-    start = time.monotonic()
+    elapsed = initial_delay
 
     async with httpx.AsyncClient() as client:
-        while (elapsed := time.monotonic() - start) < max_wait:
+        while _any_sonarqube_jars_running():
             if tick_callback:
-                tick_callback(int(elapsed), max_wait)
+                tick_callback(elapsed)
             try:
                 resp = await client.get(f"{host}/api/system/status", timeout=5)
                 if resp.json().get("status") == "UP":
@@ -509,6 +535,7 @@ async def start_and_wait(
             except (httpx.HTTPError, ValueError):
                 pass
             await asyncio.sleep(5)
+            elapsed += 5
 
     return False
 
