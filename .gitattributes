@@ -1,2 +1,6 @@
 # Force LF line endings for shell scripts
 *.sh text eol=lf
+scripts/init-full text eol=lf
+scripts/init-docker text eol=lf
+scripts/init-slim text eol=lf
+scripts/screener text eol=lf

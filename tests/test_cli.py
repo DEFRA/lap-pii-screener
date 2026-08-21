@@ -744,6 +744,28 @@ class TestSetupSonarqube:
         cli._setup_sonarqube_start(False, results)
         assert any("running at" in r[2] for r in results)
 
+    def test_start_reports_tick_progress(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+    ) -> None:
+        """The tick_callback passed to start_and_wait should print progress so
+        users don't think a slow SonarQube startup has hung."""
+        from scanners import sonarqube_manager, sonarqube_scanner
+
+        monkeypatch.setattr(sonarqube_scanner, "_find_native_sonarqube", lambda: Path("/sq"))
+
+        async def fake_start_and_wait(sq_home, port, tick_callback=None):
+            tick_callback(5)  # not a multiple of 10s, should not be logged
+            tick_callback(20)
+            return True
+
+        monkeypatch.setattr(sonarqube_manager, "start_and_wait", fake_start_and_wait)
+        monkeypatch.setattr(cli, "_setup_sonarqube_token", MagicMock())
+        results: list = []
+        cli._setup_sonarqube_start(False, results)
+        out = capsys.readouterr().out
+        assert "5s elapsed" not in out
+        assert "20s elapsed" in out
+
     def test_start_timeout(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from scanners import sonarqube_manager, sonarqube_scanner
         monkeypatch.setattr(sonarqube_scanner, "_find_native_sonarqube", lambda: Path("/sq"))
