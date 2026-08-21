@@ -16,6 +16,8 @@ RUN set -eux; \
     DOCKER_GROUP="dockersock"; \
   fi; \
   usermod -aG "${DOCKER_GROUP}" node; \
+  mkdir --parents /home/node/.cache; \
+  chown node:node /home/node/.cache; \
   apt-get update; \
   apt-get --no-install-recommends -y install \
   bash \
