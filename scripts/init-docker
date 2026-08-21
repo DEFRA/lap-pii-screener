@@ -1,0 +1,29 @@
+#!/bin/bash
+# Initializes and runs the Dockerized sensitive scanner environment.
+# Usage: ./scripts/init-docker <source-directory>
+# Example: ./scripts/init-docker /path/to/repo-to-scan
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PII_SCREENER_DIR="$(dirname "$SCRIPT_DIR")"
+if grep -qi microsoft /proc/version 2>/dev/null; then
+  SOURCE_DIR="$(wslpath -a "${1:?Usage: init-docker <source-directory>}")"
+else
+  SOURCE_DIR="${1:?Usage: init-docker <source-directory>}"
+fi
+
+mkdir -p "${PII_SCREENER_DIR}/.cache/sensitive-scanner" "${PII_SCREENER_DIR}/.cache/uv" "${PII_SCREENER_DIR}/.cache/uv-python"
+
+if [[ -z "$(docker images -q lap-pii-screener 2>/dev/null)" ]]; then
+  docker build -t lap-pii-screener "$SCRIPT_DIR"
+fi
+
+docker run --rm -it \
+  --mount "type=bind,source=${PII_SCREENER_DIR},target=/home/node/lap-pii-screener" \
+  --mount "type=bind,source=${SOURCE_DIR},target=/source" \
+  --mount "type=bind,source=${PII_SCREENER_DIR}/.cache/sensitive-scanner,target=/home/node/.sensitive-scanner" \
+  --mount "type=bind,source=${PII_SCREENER_DIR}/.cache/uv,target=/home/node/.cache/uv" \
+  --mount "type=bind,source=${PII_SCREENER_DIR}/.cache/uv-python,target=/home/node/.local/share/uv/python" \
+  lap-pii-screener
+

@@ -1,0 +1,8 @@
+#!/bin/bash
+# Runs the sensitive-scanner CLI through uv and forwards all given arguments.
+# Usage: ./scripts/screener <command> [options]
+# Example: ./scripts/screener scan /source
+
+set -euo pipefail
+
+uv run sensitive-scanner "$@"
