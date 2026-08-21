@@ -1,8 +1,9 @@
+@echo off
+
 REM Initializes and runs the Dockerized sensitive scanner environment on Windows CMD.
 REM Usage: scripts\init-docker.cmd <source-directory>
 REM Example: scripts\init-docker.cmd C:\path\to\repo-to-scan
 
-@echo off
 setlocal enabledelayedexpansion
 
 if "%~1"=="" (
