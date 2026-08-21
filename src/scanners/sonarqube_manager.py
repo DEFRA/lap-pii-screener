@@ -465,7 +465,7 @@ def _start_script(sq_home: Path) -> Optional[Path]:
     return s if s.exists() else None
 
 
-async def _any_sonarqube_jars_running() -> bool:
+def _any_sonarqube_jars_running() -> bool:
     """Return True if any .jar from the SonarQube install directory is running."""
     sq_dir = str(_SQ_DIR)
     for proc in psutil.process_iter(["cmdline"]):
@@ -473,7 +473,7 @@ async def _any_sonarqube_jars_running() -> bool:
             cmdline = " ".join(proc.info["cmdline"] or [])
             if sq_dir in cmdline and ".jar" in cmdline:
                 return True
-        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
             pass
     return False
 
@@ -525,7 +525,7 @@ async def start_and_wait(
     elapsed = initial_delay
 
     async with httpx.AsyncClient() as client:
-        while await _any_sonarqube_jars_running():
+        while _any_sonarqube_jars_running():
             if tick_callback:
                 tick_callback(elapsed)
             try:

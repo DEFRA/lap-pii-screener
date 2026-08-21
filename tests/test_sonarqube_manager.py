@@ -593,6 +593,7 @@ class TestStartAndWait:
 
         proc.wait = AsyncMock(side_effect=_never_exits)
         monkeypatch.setattr(sm.asyncio, "create_subprocess_exec", AsyncMock(return_value=proc))
+        monkeypatch.setattr(sm, "_any_sonarqube_jars_running", lambda: True)
         resp = MagicMock()
         resp.json = MagicMock(return_value={"status": "UP"})
         client = AsyncMock()
@@ -601,37 +602,38 @@ class TestStartAndWait:
         client.__aexit__ = AsyncMock(return_value=False)
         ticks = []
         with patch.object(sm.httpx, "AsyncClient", return_value=client):
-            ok = await sm.start_and_wait(tmp_path, tick_callback=lambda e: ticks.append(e))
+            ok = await sm.start_and_wait(
+                tmp_path,
+                initial_delay=0,
+                tick_callback=lambda e: ticks.append(e),
+            )
         assert ok is True
         assert ticks  # tick_callback fired at least once
 
     @pytest.mark.asyncio
-    async def test_process_exits_before_health_returns_false(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def test_no_running_jars_returns_false(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(sm, "_start_script", lambda h: tmp_path / "s")
         monkeypatch.setattr(sm.platform, "system", lambda: "Linux")
         proc = MagicMock()
         proc.wait = AsyncMock(return_value=0)
         monkeypatch.setattr(sm.asyncio, "create_subprocess_exec", AsyncMock(return_value=proc))
-        client = AsyncMock()
-        client.get = AsyncMock(side_effect=httpx.HTTPError("down"))
-        client.__aenter__ = AsyncMock(return_value=client)
-        client.__aexit__ = AsyncMock(return_value=False)
-        with patch.object(sm.httpx, "AsyncClient", return_value=client):
-            ok = await sm.start_and_wait(tmp_path, max_wait=180)
+        monkeypatch.setattr(sm, "_any_sonarqube_jars_running", lambda: False)
+        ok = await sm.start_and_wait(tmp_path, initial_delay=0)
         assert ok is False
 
     @pytest.mark.asyncio
-    async def test_non_zero_process_exit_logs_error(
+    async def test_jars_exit_before_health_returns_false(
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
-        capsys: pytest.CaptureFixture[str],
     ) -> None:
         monkeypatch.setattr(sm, "_start_script", lambda h: tmp_path / "s")
         monkeypatch.setattr(sm.platform, "system", lambda: "Linux")
         proc = MagicMock()
         proc.wait = AsyncMock(return_value=7)
         monkeypatch.setattr(sm.asyncio, "create_subprocess_exec", AsyncMock(return_value=proc))
+        running = iter((True, False))
+        monkeypatch.setattr(sm, "_any_sonarqube_jars_running", lambda: next(running))
 
         client = AsyncMock()
         client.get = AsyncMock(side_effect=httpx.HTTPError("down"))
@@ -639,13 +641,11 @@ class TestStartAndWait:
         client.__aexit__ = AsyncMock(return_value=False)
 
         with patch.object(sm.httpx, "AsyncClient", return_value=client):
-            ok = await sm.start_and_wait(tmp_path)
+            with patch.object(sm.asyncio, "sleep", new=AsyncMock()):
+                ok = await sm.start_and_wait(tmp_path, initial_delay=0)
 
         assert ok is False
-        err = capsys.readouterr().err
-        assert "exited with code 7" in err
-        assert "Check logs at:" in err
-        assert "logs" in err
+        client.get.assert_awaited_once()
 
 
 # --------------------------------------------------------------------------- #

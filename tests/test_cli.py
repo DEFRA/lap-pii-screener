@@ -915,8 +915,9 @@ class TestEditHelpers:
         assert item.decision == "approved"
 
     def test_update_decision_invalid(self) -> None:
+        item = _item()
         with pytest.raises(typer.Exit):
-            cli._edit_update_decision(_item(), "bogus")
+            cli._edit_update_decision(item, "bogus")
 
     def test_update_decision_prompt(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from rich import prompt
