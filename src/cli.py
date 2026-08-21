@@ -15,6 +15,7 @@ Usage examples:
 from __future__ import annotations
 
 import asyncio
+import os
 import shutil
 import subprocess
 import sys
@@ -72,6 +73,8 @@ _FORMAT_EXTENSIONS = {
     "html": ".html",
     "console": ".txt",
 }
+
+_SOURCE_DIR_ENV = "PII_SCREENER_SOURCE_DIR"
 
 
 def _render_and_write(report: Report, fmt: str, output: Path | None) -> None:
@@ -132,6 +135,21 @@ def _validate_path(path: Path) -> Path:
         _console.print(f"[bold red]Error:[/bold red] Path is not a directory: {path}")
         raise typer.Exit(code=1)
     return path
+
+
+def _resolve_target_path(path: Path | None) -> Path:
+    if path is not None:
+        return _validate_path(path)
+
+    env_path = os.environ.get(_SOURCE_DIR_ENV)
+    if env_path:
+        _console.print(f"[dim]Using {_SOURCE_DIR_ENV}: {Path(env_path).resolve()}[/dim]")
+        return _validate_path(Path(env_path))
+
+    _console.print(
+        f"[bold red]Error:[/bold red] Path is required. Provide a path or set {_SOURCE_DIR_ENV}."
+    )
+    raise typer.Exit(code=1)
 
 
 def _load_yaml_config(config_file: Optional[Path], target: Path) -> dict:
@@ -348,8 +366,8 @@ def _apply_fail_on(report, fail_on) -> None:
 
 @app.command()
 def scan(  # NOSONAR - CLI entry point; each parameter is a distinct user-facing option
-    path: Path = typer.Argument(
-        ...,
+    path: Path | None = typer.Argument(
+        None,
         help="Directory to scan.",
         exists=False,  # validated manually for nicer error messages
         file_okay=False,
@@ -456,7 +474,7 @@ def scan(  # NOSONAR - CLI entry point; each parameter is a distinct user-facing
     ),
 ) -> None:
     """Scan a directory for secrets, API keys, and PII."""
-    target = _validate_path(path)
+    target = _resolve_target_path(path)
 
     # Parse scanners
     scanner_list: list[str] | None = None
@@ -1154,8 +1172,8 @@ def _obf_print_summary(report) -> None:
 
 @app.command()
 def obfuscate(
-    path: Path = typer.Argument(
-        ...,
+    path: Path | None = typer.Argument(
+        None,
         help="Directory to scan and obfuscate.",
         exists=True,
         file_okay=False,
@@ -1262,7 +1280,7 @@ def obfuscate(
     from obfuscation.session import ReviewSession
     from obfuscation.reviewer import run_review
 
-    target = _validate_path(path)
+    target = _resolve_target_path(path)
     _ts = _dt.now().strftime("%Y%m%d_%H%M%S")
     _backup_dir   = backup_dir   or (target / ".pii-backups" / _ts)
     _session_path = session_file or (target / "pii-review-session.json")

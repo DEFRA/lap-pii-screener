@@ -980,6 +980,19 @@ class TestScanCommand:
         result = runner.invoke(cli.app, ["scan", str(tmp_path)])
         assert result.exit_code == 0
 
+    def test_scan_requires_path_or_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("PII_SCREENER_SOURCE_DIR", raising=False)
+        result = runner.invoke(cli.app, ["scan"])
+        assert result.exit_code == 1
+        assert "PII_SCREENER_SOURCE_DIR" in result.stdout
+
+    def test_scan_uses_env_source_dir(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        report = make_report(findings=[])
+        monkeypatch.setattr(cli, "run_scan", AsyncMock(return_value=report))
+        monkeypatch.setenv("PII_SCREENER_SOURCE_DIR", str(tmp_path))
+        result = runner.invoke(cli.app, ["scan"])
+        assert result.exit_code == 0
+
     def test_scan_unknown_scanner(self, tmp_path: Path) -> None:
         result = runner.invoke(cli.app, ["scan", str(tmp_path), "--scanners", "bogus"])
         assert result.exit_code == 1
@@ -1118,6 +1131,20 @@ class TestObfuscateCommand:
         _session(items=[_item()]).save(sess)
         monkeypatch.setattr(cli, "_obf_apply_saved_session", MagicMock())
         result = runner.invoke(cli.app, ["obfuscate", str(tmp_path), "--apply-session", str(sess)])
+        assert result.exit_code == 0
+
+    def test_obfuscate_requires_path_or_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("PII_SCREENER_SOURCE_DIR", raising=False)
+        result = runner.invoke(cli.app, ["obfuscate"])
+        assert result.exit_code == 1
+        assert "PII_SCREENER_SOURCE_DIR" in result.stdout
+
+    def test_obfuscate_uses_env_source_dir(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        report = make_report(findings=[])
+        from scanners import orchestrator
+        monkeypatch.setattr(orchestrator, "run_scan", AsyncMock(return_value=report))
+        monkeypatch.setenv("PII_SCREENER_SOURCE_DIR", str(tmp_path))
+        result = runner.invoke(cli.app, ["obfuscate"])
         assert result.exit_code == 0
 
     def test_obfuscate_no_findings(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

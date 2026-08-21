@@ -15,11 +15,20 @@ fi
 
 mkdir -p "${PII_SCREENER_DIR}/.cache/sensitive-scanner" "${PII_SCREENER_DIR}/.cache/uv" "${PII_SCREENER_DIR}/.cache/uv-python"
 
-if [[ -z "$(docker images -q lap-pii-screener 2>/dev/null)" ]]; then
-  docker build -t lap-pii-screener "$SCRIPT_DIR"
+if [[ ! -S /var/run/docker.sock ]]; then
+  echo "Error: Docker socket not found at /var/run/docker.sock"
+  echo "Run this script where the host Docker socket is available."
+  exit 1
+fi
+DOCKER_SOCKET_GID="$(stat -c '%g' /var/run/docker.sock)"
+
+IMAGE_GID="$(docker image inspect -f '{{ index .Config.Labels "lap_pii_screener.docker_gid" }}' lap-pii-screener 2>/dev/null || true)"
+if [[ -z "$(docker images -q lap-pii-screener 2>/dev/null)" || "${IMAGE_GID}" != "${DOCKER_SOCKET_GID}" ]]; then
+  docker build --build-arg "DOCKER_GID=${DOCKER_SOCKET_GID}" -t lap-pii-screener "$SCRIPT_DIR"
 fi
 
 docker run --rm -it \
+  --mount "type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock" \
   --mount "type=bind,source=${PII_SCREENER_DIR},target=/home/node/lap-pii-screener" \
   --mount "type=bind,source=${SOURCE_DIR},target=/source" \
   --mount "type=bind,source=${PII_SCREENER_DIR}/.cache/sensitive-scanner,target=/home/node/.sensitive-scanner" \

@@ -1,15 +1,27 @@
 FROM eclipse-temurin:25-jdk-noble
+ARG DOCKER_GID=999
 ENV DOCKER_RUNNING="true" \
   JAVA_HOME='/opt/java/openjdk' \
   PII_SCREENER_SOURCE_DIR='/source' \
   UV_LINK_MODE=copy
+LABEL lap_pii_screener.docker_gid="${DOCKER_GID}"
 RUN set -eux; \
   deluser ubuntu; \
-  useradd --system --uid 1000 --gid 0 node; \
+  groupadd --gid 1000 node; \
+  useradd --system --uid 1000 --gid 1000 --create-home node; \
+  if getent group "${DOCKER_GID}" >/dev/null; then \
+    DOCKER_GROUP="$(getent group "${DOCKER_GID}" | cut -d: -f1)"; \
+  else \
+    groupadd --gid "${DOCKER_GID}" dockersock; \
+    DOCKER_GROUP="dockersock"; \
+  fi; \
+  usermod -aG "${DOCKER_GROUP}" node; \
   apt-get update; \
   apt-get --no-install-recommends -y install \
   bash \
+  ca-certificates \
   curl \
+  docker.io \
   fonts-dejavu \
   gnupg \
   unzip; \
