@@ -571,6 +571,41 @@ class TestStartScript:
 
 
 # --------------------------------------------------------------------------- #
+# _any_sonarqube_jars_running                                                 #
+# --------------------------------------------------------------------------- #
+
+
+class TestAnySonarqubeJarsRunning:
+    def test_returns_true_when_jar_matches(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        sq_dir = Path("/opt/sonarqube")
+        monkeypatch.setattr(sm, "_SQ_DIR", sq_dir)
+        proc = MagicMock()
+        proc.info = {"cmdline": ["java", "-jar", str(sq_dir / "lib" / "sonar-application.jar")]}
+        monkeypatch.setattr(sm.psutil, "process_iter", lambda attrs: [proc])
+        assert sm._any_sonarqube_jars_running() is True
+
+    def test_returns_false_when_no_match(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(sm, "_SQ_DIR", Path("/opt/sonarqube"))
+        proc = MagicMock()
+        proc.info = {"cmdline": ["python", "-m", "http.server"]}
+        monkeypatch.setattr(sm.psutil, "process_iter", lambda attrs: [proc])
+        assert sm._any_sonarqube_jars_running() is False
+
+    def test_ignores_processes_that_raise(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(sm, "_SQ_DIR", Path("/opt/sonarqube"))
+
+        class _BadProc:
+            @property
+            def info(self):
+                raise sm.psutil.NoSuchProcess(1234)
+
+        good = MagicMock()
+        good.info = {"cmdline": None}
+        monkeypatch.setattr(sm.psutil, "process_iter", lambda attrs: [_BadProc(), good])
+        assert sm._any_sonarqube_jars_running() is False
+
+
+# --------------------------------------------------------------------------- #
 # start_and_wait                                                              #
 # --------------------------------------------------------------------------- #
 

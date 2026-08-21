@@ -794,6 +794,46 @@ class TestSetupSonarqube:
         assert results[0][1] == cli._SR_OK
 
 
+class TestCreateAndInstallAirgapBundleHelpers:
+    def test_create_airgap_bundle_success(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+        import scanners.airgap_manager as am
+
+        expected = tmp_path / "bundle.zip"
+        monkeypatch.setattr(am, "create_bundle", lambda *a, **kw: expected)
+        result = cli._create_airgap_bundle(non_interactive=True)
+        assert result == expected
+
+    def test_create_airgap_bundle_failure_raises_exit(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        import scanners.airgap_manager as am
+
+        def _raise(*a, **kw):
+            raise RuntimeError("download failed")
+
+        monkeypatch.setattr(am, "create_bundle", _raise)
+        with pytest.raises(typer.Exit):
+            cli._create_airgap_bundle()
+
+    def test_install_airgap_bundle_success(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+        import scanners.airgap_manager as am
+
+        called = {"v": False}
+        monkeypatch.setattr(am, "install_bundle", lambda *a, **kw: called.update(v=True))
+        cli._install_airgap_bundle(tmp_path / "bundle.zip")
+        assert called["v"] is True
+
+    def test_install_airgap_bundle_failure_raises_exit(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        import scanners.airgap_manager as am
+
+        def _raise(*a, **kw):
+            raise FileNotFoundError("no bundle")
+
+        monkeypatch.setattr(am, "install_bundle", _raise)
+        with pytest.raises(typer.Exit):
+            cli._install_airgap_bundle(tmp_path / "bundle.zip")
+
+
 class TestSetupAirgap:
     def test_setup_airgap_dispatches(self, monkeypatch: pytest.MonkeyPatch) -> None:
         called = {"v": False}
