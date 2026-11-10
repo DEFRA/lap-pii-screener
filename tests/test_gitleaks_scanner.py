@@ -14,14 +14,14 @@ from scanners.gitleaks_scanner import GitleaksScanner
 
 
 class _FakeProc:
-    def __init__(self, returncode: int = 1) -> None:
+    def __init__(self, returncode: int = 3) -> None:
         self.returncode = returncode
 
     async def communicate(self) -> tuple[bytes, bytes]:
         return (b"", b"")
 
 
-def _subprocess_writing(report_data: object, returncode: int = 1):
+def _subprocess_writing(report_data: object, returncode: int = 3):
     """Return a fake create_subprocess_exec that writes report_data to --report-path."""
     async def _fake(*args, **kwargs):  # noqa: ANN002
         argv = list(args)
@@ -155,12 +155,37 @@ class TestRun:
         assert findings == []
 
     @pytest.mark.asyncio
+    async def test_requests_dedicated_leaks_exit_code(self, tmp_path: Path) -> None:
+        calls: list[list[str]] = []
+        fake = _subprocess_writing([])
+
+        async def _spy(*args, **kwargs):  # noqa: ANN002
+            calls.append([str(a) for a in args])
+            return await fake(*args, **kwargs)
+        with patch.object(gitleaks_scanner, "ensure_binary", AsyncMock(return_value=Path("gitleaks"))), \
+             patch.object(gitleaks_scanner.asyncio, "create_subprocess_exec", side_effect=_spy):
+            await GitleaksScanner()._run(ScanConfig(path=str(tmp_path)))
+        argv = calls[0]
+        assert argv[argv.index("--exit-code") + 1] == "3"
+
+    @pytest.mark.asyncio
+    async def test_exit_code_1_is_treated_as_error(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+        # Gitleaks exits 1 on fatal errors such as a config it cannot load.
+        data = [_item(str(tmp_path / "secrets.py"))]
+        with patch.object(gitleaks_scanner, "ensure_binary", AsyncMock(return_value=Path("gitleaks"))), \
+             patch.object(gitleaks_scanner.asyncio, "create_subprocess_exec",
+                          side_effect=_subprocess_writing(data, returncode=1)):
+            findings = await GitleaksScanner()._run(ScanConfig(path=str(tmp_path)))
+        assert findings == []
+        assert "Unexpected exit code 1" in capsys.readouterr().err
+
+    @pytest.mark.asyncio
     async def test_invalid_json_returns_empty(self, tmp_path: Path) -> None:
         async def _fake(*args, **kwargs):  # noqa: ANN002
             argv = list(args)
             rp = argv[argv.index("--report-path") + 1]
             Path(rp).write_text("{not valid", encoding="utf-8")
-            return _FakeProc(1)
+            return _FakeProc(3)
         with patch.object(gitleaks_scanner, "ensure_binary", AsyncMock(return_value=Path("gitleaks"))), \
              patch.object(gitleaks_scanner.asyncio, "create_subprocess_exec", side_effect=_fake):
             findings = await GitleaksScanner()._run(ScanConfig(path=str(tmp_path)))
