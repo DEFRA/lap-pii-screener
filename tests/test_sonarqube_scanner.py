@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import subprocess
 import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -396,6 +397,8 @@ class TestStartNative:
         script = tmp_path / "StartSonar.bat"
         script.write_text("x", encoding="utf-8")
         monkeypatch.setattr(ss, "_native_start_script", lambda h: script)
+        monkeypatch.setattr(subprocess, "CREATE_NEW_CONSOLE", 0x10, raising=False)
+        monkeypatch.setattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0x200, raising=False)
         monkeypatch.setattr(ss.sys, "platform", "win32")
         monkeypatch.setattr(ss, "_apply_windows_sonar_props", MagicMock())
         monkeypatch.setattr(ss, "_read_sonar_port", lambda h: 9100)
@@ -410,6 +413,8 @@ class TestStartNative:
         script = tmp_path / "StartSonar.bat"
         script.write_text("x", encoding="utf-8")
         monkeypatch.setattr(ss, "_native_start_script", lambda h: script)
+        monkeypatch.setattr(subprocess, "CREATE_NEW_CONSOLE", 0x10, raising=False)
+        monkeypatch.setattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0x200, raising=False)
         monkeypatch.setattr(ss.sys, "platform", "win32")
         monkeypatch.setattr(ss, "_apply_windows_sonar_props", MagicMock())
         monkeypatch.setattr(ss, "_read_sonar_port", lambda h: 9100)
