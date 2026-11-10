@@ -224,7 +224,7 @@ _p("pii_passport", "pii_passport", "high",
 # Date of birth patterns (YYYY-MM-DD, DD/MM/YYYY, MM/DD/YYYY)
 # Negative lookbehind/ahead for '/' prevents matching URL archive paths like /2007/07/27/
 _p("pii_dob", "pii_date_of_birth", "medium",
-   r"(?<!/)(?:19|20)\d{2}[-/](0[1-9]|1[0-2])[-/](0[1-9]|[12]\d|3[01])\b(?!/)")
+   r"(?<!/)\b(?:19|20)\d{2}[-/](0[1-9]|1[0-2])[-/](0[1-9]|[12]\d|3[01])\b(?!/)")
 
 # PEM private key headers
 _p("private_key_pem", "private_key_rsa", "critical",

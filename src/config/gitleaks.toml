@@ -7,7 +7,7 @@ title = "sensitive-code-scanner"
 # Merge with Gitleaks' built-in ruleset (150+ service-specific rules for AWS,
 # GitHub, Stripe, generic high-entropy secrets, etc.).  Without this, --config
 # replaces the defaults entirely and only the rules below are active.
-[extends]
+[extend]
 useDefault = true
 
 # ── Custom PII rules ──────────────────────────────────────────────────────────
@@ -57,7 +57,9 @@ tags = ["pii", "ni-number", "gdpr"]
 [[rules]]
 id = "custom-pii-dob"
 description = "Date of birth pattern (ISO and common formats) — excludes URL archive paths"
-regex = '''(?<!/)(?:19|20)\d{2}[-/](0[1-9]|1[0-2])[-/](0[1-9]|[12]\d|3[01])\b(?!/)'''
+# RE2 has no lookbehind: match the preceding char instead and report only the date (secretGroup).
+regex = '''(?:^|[^/\w])((?:19|20)\d{2}[-/](?:0[1-9]|1[0-2])[-/](?:0[1-9]|[12]\d|3[01]))\b'''
+secretGroup = 1
 tags = ["pii", "date-of-birth", "gdpr"]
 
 [[rules]]

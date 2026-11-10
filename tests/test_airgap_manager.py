@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sys
+import types
 import zipfile
 from pathlib import Path
 
@@ -335,6 +336,9 @@ class TestInstallSemgrep:
 
 class TestEnsureSpacyForBundle:
     def test_model_download_success(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        fake = types.ModuleType("spacy")
+        fake.load = lambda name: None  # type: ignore[attr-defined]
+        monkeypatch.setitem(sys.modules, "spacy", fake)
         class _Proc:
             returncode = 0
 
@@ -343,6 +347,12 @@ class TestEnsureSpacyForBundle:
         assert (ok, note) == (True, "ready")
 
     def test_model_download_failure(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        def _load(name: str) -> None:
+            raise OSError("model missing")
+
+        fake = types.ModuleType("spacy")
+        fake.load = _load  # type: ignore[attr-defined]
+        monkeypatch.setitem(sys.modules, "spacy", fake)
         class _Proc:
             returncode = 1
 

@@ -619,6 +619,7 @@ class TestStartAndWait:
     @pytest.mark.asyncio
     async def test_ready_immediately_windows(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(sm, "_start_script", lambda h: tmp_path / "s.bat")
+        monkeypatch.setattr(sm.subprocess, "CREATE_NEW_CONSOLE", 0x10, raising=False)
         monkeypatch.setattr(sm.platform, "system", lambda: "Windows")
         proc = MagicMock()
 

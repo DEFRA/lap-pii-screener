@@ -21,8 +21,9 @@ _CONFIG_PATH = Path(__file__).parent.parent / "config" / "gitleaks.toml"
 _ENGINE = RemediationEngine()
 _REG_ENGINE = RegulationEngine()
 
-# Gitleaks exits 1 when leaks are found — that is expected, not an error.
-_EXPECTED_EXIT_CODES = {0, 1}
+# Gitleaks also exits 1 on fatal errors (e.g. a bad config), so leaks get their own code.
+_LEAKS_EXIT_CODE = 3
+_EXPECTED_EXIT_CODES = {0, _LEAKS_EXIT_CODE}
 
 
 class GitleaksScanner(AbstractScanner):
@@ -76,6 +77,7 @@ class GitleaksScanner(AbstractScanner):
                 "--source", scan_source,
                 "--report-format", "json",
                 "--report-path", report_path,
+                "--exit-code", str(_LEAKS_EXIT_CODE),
             ]
 
             if _CONFIG_PATH.exists():
